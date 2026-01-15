@@ -1,0 +1,32 @@
+{
+  "name": "chat-app-workspace",
+  "version": "2.0.0",
+  "description": "WhatsApp-like chat application with real-time messaging",
+  "scripts": {
+    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
+    "setup": "npm run install:backend && npm run install:frontend",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "dev:backend": "cd backend && npm start",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "start": "npm run start"
+  },
+  "keywords": [
+    "chat",
+    "whatsapp",
+    "real-time",
+    "socket.io",
+    "MERN",
+    "messaging"
+  ],
+  "author": "Abdullah Abad",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  }
+}
