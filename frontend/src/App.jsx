@@ -1,7 +1,7 @@
 import Navbar from "./components/Navbar";
 
 import Home from "./pages/Home";
-import SignUp from "./pages/SignUp";
+import SignUp from "./pages/Signup";
 import Login from "./pages/Login";
 import Setting from "./pages/Setting";
 import Profile from "./pages/Profile";
