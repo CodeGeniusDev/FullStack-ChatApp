@@ -108,11 +108,12 @@ const ChatProfileOpener = ({ onClose, user }) => {
                   : "Unknown"}
               </p>
             </div>
-            {/* TODO: Add bio field to user schema and display it here */}
-            {/* <div>
+            <div>
               <p className="text-sm font-medium">Bio:</p>
-              <p className="text-sm text-base-content/70">{user.bio || "No bio provided"}</p>
-            </div> */}
+              <p className="text-sm text-base-content/70">
+                {user.bio || "No bio provided"}
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -28,6 +28,7 @@ const ChatContainer = () => {
   const [editingMessage, setEditingMessage] = useState(null);
   const [hoveredMessage, setHoveredMessage] = useState(null);
   const [imageModal, setImageModal] = useState(null);
+  const [longPress, setLongPress] = useState(null);
 
   // Check if the selected user is typing (not yourself!)
   const isOtherUserTyping = typingUsers[selectedUser?._id] || false;
@@ -97,11 +98,23 @@ const ChatContainer = () => {
     }
   };
 
+  // const handleTouchStart = (messageId) => {
+  //   pressTimer.current = setTimeout(() => {
+  //     setLongPress(messageId);
+  //   }, 500); // 500ms delay for long press
+  // };
+  // const handleTouchEnd = () => {
+  //   clearTimeout(pressTimer.current);
+  //   setTimeout(() => {
+  //     setLongPress(null);
+  //   }, 2000); // Hide after 2 seconds
+  // };
+
   const reactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
   if (isMessagesLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-auto border-t border-base-300">
+      <div className="flex-1 flex flex-col overflow-auto">
         <ChatHeader />
         <MessageSkeleton />
         <MessagesInput />
@@ -111,7 +124,7 @@ const ChatContainer = () => {
 
   return (
     <>
-      <div className="flex-1 flex flex-col overflow-auto border-t border-base-300">
+      <div className="flex-1 flex flex-col overflow-auto">
         <ChatHeader />
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -192,6 +205,8 @@ const ChatContainer = () => {
                           </div>
                         )}
                       </div>
+
+                      {/* message reactions */}
                       <div className="absolute -bottom-4 right-0">
                         {/* Reactions */}
                         {message.reactions && message.reactions.length > 0 && (
@@ -220,7 +235,9 @@ const ChatContainer = () => {
                             <button
                               key={emoji}
                               onClick={() => handleReaction(message._id, emoji)}
-                              onMouseEnter={() => setHoveredMessage(message._id)}
+                              onMouseEnter={() =>
+                                setHoveredMessage(message._id)
+                              }
                               className="hover:scale-125 transition-transform cursor-pointer"
                             >
                               {emoji}

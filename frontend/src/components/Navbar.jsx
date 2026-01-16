@@ -7,10 +7,7 @@ const Navbar = () => {
   const { authUser, logOut } = useAuthStore();
 
   return (
-    <header
-      className="border-b border-base-300 fixed w-full top-0 z-40 
-    backdrop-blur-lg bg-base-100/80"
-    >
+    <header className="border-b border-base-300 fixed w-full top-0 z-40 backdrop-blur-lg bg-base-100/80">
       <div className="container mx-auto px-4 h-16">
         <div className="flex items-center justify-between h-full">
           <div className="flex items-center gap-8">
@@ -22,7 +19,7 @@ const Navbar = () => {
                 <MessageSquare className="w-5 h-5 text-primary" />
               </div>
               <h1 className="text-lg font-bold tracking-wider transition-all">
-                CodeGeniusX.Chat
+                ChatGeniusX
               </h1>
             </Link>
           </div>

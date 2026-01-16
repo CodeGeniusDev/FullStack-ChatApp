@@ -4,7 +4,12 @@ import { Image, Send, X, Smile } from "lucide-react";
 import toast from "react-hot-toast";
 import EmojiPicker from "emoji-picker-react";
 
-const MessageInput = ({ editingMessage, setEditingMessage }) => {
+const MessageInput = ({
+  editingMessage,
+  setEditingMessage,
+  onSendMessage,
+  isPreview = false,
+}) => {
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -64,7 +69,10 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
     if (!text.trim() && !imagePreview) return;
 
     try {
-      if (editingMessage) {
+      if (isPreview && onSendMessage) {
+        // In preview mode, use the provided callback
+        onSendMessage({ text: text.trim(), image: imagePreview });
+      } else if (editingMessage) {
         // Edit existing message
         await editMessage(editingMessage._id, text.trim());
         setEditingMessage(null);
@@ -76,18 +84,19 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
         });
       }
 
-      // Clear form
       setText("");
       setImagePreview(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      setTyping(false);
-
-      // Clear typing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
+      if (!isPreview) {
+        clearReplyingTo();
       }
     } catch (error) {
-      console.error("Failed to send message:", error);
+      console.error("Error sending message:", error);
+      toast.error("Failed to send message");
+    }
+
+    // Clear typing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
     }
   };
 
@@ -105,16 +114,16 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   };
 
   return (
-    <div className="p-4 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/90">
+    <div className="p-4 w-full border-t border-base-300 bg-base-200/50 backdrop-blur-md -webkit-backdrop-blur-md relative overflow-x-hidden">
       {/* Reply Preview */}
       {replyingTo && (
         <div className="mb-2 flex items-center gap-2 backdrop-blur-lg bg-base-100/90 p-2 rounded-lg">
-          <div className="flex-1">
-            <p className="text-xs text-primary font-semibold">
-              Replying to {replyingTo.senderId.fullName}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-primary font-semibold truncate">
+              Replying to {replyingTo?.senderId?.fullName || "Unknown User"}
             </p>
-            <p className="text-sm truncate opacity-70">
-              {replyingTo.text || "Image"}
+            <p className="text-sm text-ellipsis overflow-hidden whitespace-nowrap opacity-70">
+              {replyingTo?.text || (replyingTo?.image ? "Image" : "Message")}
             </p>
           </div>
           <button
@@ -174,7 +183,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
             <textarea
               ref={textareaRef}
               rows={1}
-              className="flex-1 textarea textarea-bordered outline-none resize-none overflow-hidden"
+              className="flex-1 textarea textarea-bordered overflow-y-auto outline-none resize-none overflow-hidden"
               placeholder="Type a message..."
               value={text}
               onChange={(e) => handleTyping(e.target.value)}
@@ -226,7 +235,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
             </div>
 
             {/* Image Upload Button */}
-            {!editingMessage && (
+            {!editingMessage && !isPreview && (
               <button
                 type="button"
                 className={`btn btn-circle btn-ghost
