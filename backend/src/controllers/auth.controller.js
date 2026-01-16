@@ -34,6 +34,7 @@ export const signup = async (req, res) => {
         fullName: newUser.fullName,
         email: newUser.email,
         profilePic: newUser.profilePic,
+        bio: newUser.bio,
       });
     } else {
       return res.status(400).json({ message: "User not created" });
@@ -62,6 +63,7 @@ export const login = async (req, res) => {
       fullName: user.fullName,
       email: user.email,
       profilePic: user.profilePic,
+      bio: user.bio,
       message: "User logged in successfully",
     });
   } catch (error) {
@@ -75,6 +77,8 @@ export const logout = (req, res) => {
     res.cookie("token", "", {
       maxAge: 0,
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
       expires: new Date(0),
     });
     return res.status(200).json({ message: "User logged out successfully" });
@@ -86,17 +90,33 @@ export const logout = (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const { profilePic } = req.body;
+    const { profilePic, fullName, bio } = req.body;
     const userId = req.user._id;
 
-    if (!profilePic) {
-      return res.status(400).json({ message: "Profile picture is required" });
+    const updateData = {};
+
+    // Update name if provided
+    if (fullName && fullName.trim()) {
+      updateData.fullName = fullName.trim();
     }
 
-    // Only upload to Cloudinary if it's a base64 string
-    if (typeof profilePic === "string" && profilePic.startsWith("data:image")) {
+    // Update bio if provided
+    if (bio !== undefined) {
+      if (bio.length > 150) {
+        return res
+          .status(400)
+          .json({ message: "Bio must be 150 characters or less" });
+      }
+      updateData.bio = bio.trim();
+    }
+
+    // Handle profile picture upload
+    if (
+      profilePic &&
+      typeof profilePic === "string" &&
+      profilePic.startsWith("data:image")
+    ) {
       try {
-        // Upload the complete base64 string directly to Cloudinary
         const uploadResponse = await cloudinary.uploader.upload(profilePic, {
           folder: "chat_app/profile_pics",
           resource_type: "image",
@@ -106,28 +126,7 @@ export const updateProfile = async (req, res) => {
           ],
         });
 
-        const imageUrl = uploadResponse.secure_url;
-
-        const updatedUser = await User.findByIdAndUpdate(
-          userId,
-          { profilePic: imageUrl },
-          { new: true }
-        );
-
-        if (!updatedUser) {
-          return res.status(404).json({ message: "User not found" });
-        }
-
-        // Return user without password
-        const userResponse = {
-          _id: updatedUser._id,
-          fullName: updatedUser.fullName,
-          email: updatedUser.email,
-          profilePic: updatedUser.profilePic,
-          createdAt: updatedUser.createdAt,
-        };
-
-        res.status(200).json(userResponse);
+        updateData.profilePic = uploadResponse.secure_url;
       } catch (uploadError) {
         console.error("Cloudinary upload error:", uploadError);
         return res.status(500).json({
@@ -135,11 +134,22 @@ export const updateProfile = async (req, res) => {
           error: uploadError.message,
         });
       }
-    } else {
-      return res.status(400).json({
-        message: "Invalid image format. Please upload a valid image file.",
-      });
     }
+
+    // Check if there's anything to update
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: "No fields to update" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+    }).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json(updatedUser);
   } catch (error) {
     console.error("Error in updateProfile:", error);
     return res.status(500).json({
@@ -155,7 +165,16 @@ export const checkAuth = (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
     const user = req.user;
-    res.status(200).json(user);
+    // Make sure to exclude sensitive data
+    const userData = {
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      profilePic: user.profilePic,
+      bio: user.bio,
+      // Add other non-sensitive fields as needed
+    };
+    res.status(200).json(userData);
   } catch (error) {
     console.log("Error in checkAuth controller", error.message);
     res.status(500).json({ message: "Internal Server Error" });

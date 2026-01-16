@@ -36,6 +36,25 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
+  // Update user's last message locally without full reload
+  updateUserLastMessage: (userId, message) => {
+    set((state) => ({
+      users: state.users.map((user) => {
+        if (user._id === userId) {
+          return {
+            ...user,
+            lastMessage: message,
+          };
+        }
+        return user;
+      }).sort((a, b) => {
+        const aTime = a.lastMessage?.createdAt || a.createdAt;
+        const bTime = b.lastMessage?.createdAt || b.createdAt;
+        return new Date(bTime) - new Date(aTime);
+      }),
+    }));
+  },
+
   getMessages: async (userId) => {
     set({ isMessagesLoading: true });
     try {
@@ -73,8 +92,13 @@ export const useChatStore = create((set, get) => ({
       );
       set({ messages: [...messages, res.data], replyingTo: null });
       
-      // Refresh user list to update last message
-      get().getUsers();
+      // Update sidebar locally without reload
+      get().updateUserLastMessage(selectedUser._id, {
+        text: res.data.text,
+        image: res.data.image,
+        createdAt: res.data.createdAt,
+        senderId: res.data.senderId._id,
+      });
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error(error.response?.data?.message || "Failed to send message");
@@ -110,7 +134,7 @@ export const useChatStore = create((set, get) => ({
           : "Message deleted for you"
       );
       
-      // Refresh user list
+      // Refresh user list only for deletions
       get().getUsers();
     } catch (error) {
       console.error("Error deleting message:", error);
@@ -132,8 +156,19 @@ export const useChatStore = create((set, get) => ({
 
       toast.success("Message edited");
       
-      // Refresh user list
-      get().getUsers();
+      // Update sidebar last message if it's the edited one
+      const { selectedUser } = get();
+      if (selectedUser) {
+        const lastMsg = get().messages[get().messages.length - 1];
+        if (lastMsg._id === messageId) {
+          get().updateUserLastMessage(selectedUser._id, {
+            text: res.data.text,
+            image: res.data.image,
+            createdAt: res.data.createdAt,
+            senderId: res.data.senderId._id,
+          });
+        }
+      }
     } catch (error) {
       console.error("Error editing message:", error);
       toast.error(error.response?.data?.error || "Failed to edit message");
@@ -210,6 +245,14 @@ export const useChatStore = create((set, get) => ({
           },
         });
         
+        // Update sidebar with new message
+        get().updateUserLastMessage(newMessage.senderId._id, {
+          text: newMessage.text,
+          image: newMessage.image,
+          createdAt: newMessage.createdAt,
+          senderId: newMessage.senderId._id,
+        });
+        
         // Show browser notification
         if (notificationsEnabled && document.hidden) {
           showNotification(
@@ -230,9 +273,6 @@ export const useChatStore = create((set, get) => ({
           }
         );
         
-        // Refresh user list to update last message and sort
-        get().getUsers();
-        
         return;
       }
 
@@ -242,9 +282,6 @@ export const useChatStore = create((set, get) => ({
 
       // Auto mark as read
       get().markMessagesAsRead(currentSelectedUser._id);
-      
-      // Refresh user list
-      get().getUsers();
     });
 
     // Message delivered
@@ -286,7 +323,6 @@ export const useChatStore = create((set, get) => ({
           msg._id === editedMessage._id ? editedMessage : msg
         ),
       });
-      get().getUsers();
     });
 
     // Reaction added

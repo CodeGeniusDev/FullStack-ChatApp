@@ -13,16 +13,43 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: ["http://localhost:5173", "https://chatgeniusx.netlify.app"],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Socket-Id']
-  }
-});
 
 const PORT = process.env.PORT || 5002;
+
+// Allowed origins for CORS
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  process.env.FRONTEND_URL, // Your production frontend URL
+].filter(Boolean);
+
+// CORS configuration
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+// Socket.IO configuration
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 
 // Store for tracking online users and their socket IDs
 const userSocketMap = {}; // {userId: socketId}
@@ -32,27 +59,10 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 app.use(cookieParser());
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://chatgeniusx.netlify.app"
-];
-
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-        return callback(new Error(msg), false);
-      }
-      return callback(null, true);
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Socket-Id'],
-  })
-);
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", message: "Server is running" });
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
@@ -62,7 +72,7 @@ io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
   
   const userId = socket.handshake.query.userId;
-  if (userId) {
+  if (userId && userId !== 'undefined') {
     userSocketMap[userId] = socket.id;
     console.log(`User ${userId} connected with socket ${socket.id}`);
     
@@ -122,7 +132,7 @@ io.on('connection', (socket) => {
   // Handle disconnection
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
-    if (userId) {
+    if (userId && userId !== 'undefined') {
       delete userSocketMap[userId];
       
       // Update user's lastSeen to current time (offline)
@@ -140,7 +150,14 @@ io.on('connection', (socket) => {
 app.set('io', io);
 app.set('userSocketMap', userSocketMap);
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: "Something went wrong!" });
+});
+
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   connectDB();
 });
