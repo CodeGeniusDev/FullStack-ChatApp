@@ -1,0 +1,14 @@
+# netlify.toml
+
+[build]
+  # These are already set in Netlify UI, but good to have here too
+  base    = "frontend"
+  command = "npm run build"
+  publish = "frontend/dist"   # or just "dist" if base is frontend
+
+# Proxy all /api/* requests to your Render backend
+[[redirects]]
+  from   = "/api/*"
+  to     = "https://chatgenius-c9q3.onrender.com/:splat"
+  status = 200
+  force  = true
