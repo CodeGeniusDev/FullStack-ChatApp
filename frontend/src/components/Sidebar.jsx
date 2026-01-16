@@ -294,11 +294,11 @@ const Sidebar = () => {
                   onClick={() => setSelectedUser(user)}
                   className={`
                   w-full p-3 flex items-center gap-3
-                  hover:bg-base-200 ring-1 ring-base-200/50 transition-colors cursor-pointer
+                  hover:bg-base-200 ring-1 border-l-4 border-base-100 ring-base-200 transition-colors cursor-pointer
                   ${
                     selectedUser?._id === user._id
-                      ? "bg-base-200 ring-1 ring-base-300"
-                      : ""
+                      ? "bg-base-200 border-l-4 border-l-primary"
+                      : "border-l-4 border-l-transparent"
                   }
                 `}
                 >
