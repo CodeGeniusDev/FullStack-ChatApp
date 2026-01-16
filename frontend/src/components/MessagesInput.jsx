@@ -3,16 +3,13 @@ import { useChatStore } from "../store/useChatStore";
 import { Image, Send, X, Smile } from "lucide-react";
 import toast from "react-hot-toast";
 import EmojiPicker from "emoji-picker-react";
+import { compressImage, debounce } from "../lib/utils";
 
-const MessageInput = ({
-  editingMessage,
-  setEditingMessage,
-  onSendMessage,
-  isPreview = false,
-}) => {
+const MessageInput = ({ editingMessage, setEditingMessage }) => {
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -27,18 +24,36 @@ const MessageInput = ({
     }
   }, [editingMessage]);
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
+    if (!file) return;
+
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+    // Check file size (max 5MB before compression)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size should be less than 5MB");
+      return;
+    }
+
+    setIsUploading(true);
+    toast.loading("Compressing image...", { id: "compress" });
+
+    try {
+      // Compress image before upload
+      const compressedBase64 = await compressImage(file, 1024, 1024, 0.8);
+
+      setImagePreview(compressedBase64);
+      toast.success("Image ready to send", { id: "compress" });
+    } catch (error) {
+      console.error("Image compression error:", error);
+      toast.error("Failed to process image", { id: "compress" });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const removeImage = () => {
@@ -46,21 +61,22 @@ const MessageInput = ({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // Debounced typing indicator
+  const debouncedStopTyping = useRef(
+    debounce(() => {
+      setTyping(false);
+    }, 3000)
+  ).current;
+
   const handleTyping = (value) => {
     setText(value);
 
-    // Clear previous timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Emit typing status
     setTyping(true);
-
-    // Stop typing after 3 seconds of inactivity
-    typingTimeoutRef.current = setTimeout(() => {
-      setTyping(false);
-    }, 3000);
+    debouncedStopTyping();
   };
 
   const handleSendMessage = async (e) => {
@@ -69,34 +85,32 @@ const MessageInput = ({
     if (!text.trim() && !imagePreview) return;
 
     try {
-      if (isPreview && onSendMessage) {
-        // In preview mode, use the provided callback
-        onSendMessage({ text: text.trim(), image: imagePreview });
-      } else if (editingMessage) {
-        // Edit existing message
+      if (editingMessage) {
         await editMessage(editingMessage._id, text.trim());
         setEditingMessage(null);
       } else {
-        // Send new message
         await sendMessage({
           text: text.trim(),
           image: imagePreview,
         });
       }
 
+      // Clear form
       setText("");
       setImagePreview(null);
-      if (!isPreview) {
-        clearReplyingTo();
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setTyping(false);
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "40px";
       }
     } catch (error) {
-      console.error("Error sending message:", error);
-      toast.error("Failed to send message");
-    }
-
-    // Clear typing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
+      console.error("Failed to send message:", error);
     }
   };
 
@@ -114,21 +128,21 @@ const MessageInput = ({
   };
 
   return (
-    <div className="p-4 w-full border-t border-base-300 bg-base-200/50 backdrop-blur-md -webkit-backdrop-blur-md relative overflow-x-hidden">
+    <div className="p-4 w-full border-t border-base-300">
       {/* Reply Preview */}
       {replyingTo && (
-        <div className="mb-2 flex items-center gap-2 backdrop-blur-lg bg-base-100/90 p-2 rounded-lg">
+        <div className="mb-2 flex items-center gap-2 bg-base-200 p-2 rounded-lg">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-primary font-semibold truncate">
-              Replying to {replyingTo?.senderId?.fullName || "Unknown User"}
+            <p className="text-xs text-primary font-semibold">
+              Replying to {replyingTo.senderId.fullName}
             </p>
-            <p className="text-sm text-ellipsis overflow-hidden whitespace-nowrap opacity-70">
-              {replyingTo?.text || (replyingTo?.image ? "Image" : "Message")}
+            <p className="text-sm truncate opacity-70">
+              {replyingTo.text || "Image"}
             </p>
           </div>
           <button
             onClick={clearReplyingTo}
-            className="btn btn-ghost btn-sm btn-circle"
+            className="btn btn-ghost btn-sm btn-circle flex-shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -137,8 +151,8 @@ const MessageInput = ({
 
       {/* Edit Preview */}
       {editingMessage && (
-        <div className="mb-2 flex items-center gap-2 backdrop-blur-lg bg-base-100/90 p-2 rounded-lg">
-          <div className="flex-1">
+        <div className="mb-2 flex items-center gap-2 bg-base-200 p-2 rounded-lg">
+          <div className="flex-1 min-w-0">
             <p className="text-xs text-warning font-semibold">
               Editing message
             </p>
@@ -149,7 +163,7 @@ const MessageInput = ({
               setEditingMessage(null);
               setText("");
             }}
-            className="btn btn-ghost btn-sm btn-circle"
+            className="btn btn-ghost btn-sm btn-circle flex-shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -158,7 +172,7 @@ const MessageInput = ({
 
       {/* Image Preview */}
       {imagePreview && (
-        <div className="mb-3 flex items-center gap-2 backdrop-blur-lg bg-base-100/90 p-2 rounded-lg">
+        <div className="mb-3 flex items-center gap-2">
           <div className="relative">
             <img
               src={imagePreview}
@@ -183,7 +197,7 @@ const MessageInput = ({
             <textarea
               ref={textareaRef}
               rows={1}
-              className="flex-1 textarea textarea-bordered overflow-y-auto outline-none resize-none overflow-hidden"
+              className="flex-1 textarea textarea-bordered resize-none overflow-hidden overflow-y-auto outline-none text-sm sm:text-base"
               placeholder="Type a message..."
               value={text}
               onChange={(e) => handleTyping(e.target.value)}
@@ -204,13 +218,14 @@ const MessageInput = ({
               className="hidden"
               ref={fileInputRef}
               onChange={handleImageChange}
+              disabled={isUploading}
             />
 
             {/* Emoji Picker Button */}
             <div className="relative">
               <button
                 type="button"
-                className="btn btn-circle btn-ghost"
+                className="btn btn-circle btn-ghost btn-sm sm:btn-md"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
               >
                 <Smile size={20} />
@@ -226,8 +241,11 @@ const MessageInput = ({
                     <EmojiPicker
                       onEmojiClick={handleEmojiClick}
                       theme="dark"
-                      width={300}
+                      width={280}
                       height={400}
+                      searchDisabled
+                      skinTonesDisabled
+                      previewConfig={{ showPreview: false }}
                     />
                   </div>
                 </>
@@ -235,18 +253,16 @@ const MessageInput = ({
             </div>
 
             {/* Image Upload Button */}
-            {!editingMessage && !isPreview && (
+            {!editingMessage && (
               <button
                 type="button"
-                className={`btn btn-circle btn-ghost
-                     ${
-                       imagePreview
-                         ? "text-primary bg-primary/10 border-primary/20"
-                         : "text-base-400/60"
-                     }`}
+                className={`btn btn-circle btn-ghost btn-sm sm:btn-md ${
+                  imagePreview ? "text-emerald-500" : "text-zinc-400"
+                } ${isUploading ? "loading" : ""}`}
                 onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
               >
-                <Image size={20} />
+                {!isUploading && <Image size={20} />}
               </button>
             )}
           </div>
@@ -255,10 +271,10 @@ const MessageInput = ({
         {/* Send Button */}
         <button
           type="submit"
-          className="btn btn-circle btn-primary"
-          disabled={!text.trim() && !imagePreview}
+          className="btn btn-circle btn-primary btn-sm sm:btn-md"
+          disabled={(!text.trim() && !imagePreview) || isUploading}
         >
-          <Send size={20} />
+          <Send size={18} />
         </button>
       </form>
     </div>

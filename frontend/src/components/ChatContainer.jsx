@@ -7,6 +7,7 @@ import ChatHeader from "./ChatHeader";
 import MessagesInput from "./MessagesInput";
 import { formatMessageTime } from "../lib/utils";
 import { Check, CheckCheck, Reply, Trash2, Edit, Copy, X } from "lucide-react";
+import { Star, Share2, Download, MoreVertical } from "lucide-react";
 
 const ChatContainer = () => {
   const {
@@ -28,7 +29,7 @@ const ChatContainer = () => {
   const [editingMessage, setEditingMessage] = useState(null);
   const [hoveredMessage, setHoveredMessage] = useState(null);
   const [imageModal, setImageModal] = useState(null);
-  const [longPress, setLongPress] = useState(null);
+  // const [longPress, setLongPress] = useState(null);
 
   // Check if the selected user is typing (not yourself!)
   const isOtherUserTyping = typingUsers[selectedUser?._id] || false;
@@ -96,6 +97,35 @@ const ChatContainer = () => {
       default:
         return null;
     }
+  };
+
+  // Function to make links clickable
+  const renderMessageText = (text) => {
+    if (!text) return null;
+
+    const urlRegex = /(https?:\/\/[^\s]+)/gi;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, index) => {
+      if (!part) return null;
+
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400/95 underline hover:text-blue-400/60"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+
+      return <span key={index}>{part}</span>;
+    });
   };
 
   // const handleTouchStart = (messageId) => {
@@ -195,7 +225,9 @@ const ChatContainer = () => {
                         )}
 
                         {message.text && (
-                          <p className="break-words">{message.text}</p>
+                          <p className="wrap-break whitespace-pre-wrap">
+                            {renderMessageText(message.text)}
+                          </p>
                         )}
 
                         {/* Message status (only for own messages) */}
@@ -358,22 +390,53 @@ const ChatContainer = () => {
 
       {/* Image Modal */}
       {imageModal && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setImageModal(null)}
-        >
-          <button
-            className="absolute top-4 right-4 btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none"
-            onClick={() => setImageModal(null)}
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <img
-            src={imageModal}
-            alt="Full size"
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
+        <div className="fixed inset-0 z-50 bg-black/90">
+          {/* Header */}
+          <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-4 text-white backdrop-blur-lg bg-black/20">
+            {/* Left */}
+            <div className="flex items-center gap-3">
+              <button
+                className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none"
+                onClick={() => setImageModal(null)}
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-medium">Image</span>
+                <span className="text-xs text-gray-300">Preview</span>
+              </div>
+            </div>
+
+            {/* Right actions */}
+            <div className="flex items-center gap-2">
+              <button className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none">
+                <Star className="w-5 h-5" />
+              </button>
+
+              <button className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none">
+                <Share2 className="w-5 h-5" />
+              </button>
+
+              <button className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none">
+                <Download className="w-5 h-5" />
+              </button>
+
+              <button className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none">
+                <MoreVertical className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Image container */}
+          <div className="flex items-center justify-center h-full pt-16 pb-6 px-4">
+            <img
+              src={imageModal}
+              alt="Full size"
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         </div>
       )}
     </>

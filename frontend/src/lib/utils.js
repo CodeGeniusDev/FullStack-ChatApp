@@ -8,7 +8,7 @@ export const formatMessageTime = (date) => {
 
 export const formatLastSeen = (date) => {
   if (!date) return "Never";
-  
+
   const now = new Date();
   const lastSeen = new Date(date);
   const diffMs = now - lastSeen;
@@ -20,7 +20,7 @@ export const formatLastSeen = (date) => {
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
-  
+
   return lastSeen.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -69,9 +69,91 @@ export const showNotification = (title, options = {}) => {
       }
     };
 
-    // Auto close after 5 seconds
     setTimeout(() => notification.close(), 5000);
 
     return notification;
   }
+};
+
+// Image compression utility
+export const compressImage = (
+  file,
+  maxWidth = 1024,
+  maxHeight = 1024,
+  quality = 0.8
+) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        // Calculate new dimensions
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to base64 with compression
+        const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+
+        resolve(compressedBase64);
+      };
+
+      img.onerror = () => {
+        reject(new Error("Failed to load image"));
+      };
+
+      img.src = e.target.result;
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Failed to read file"));
+    };
+
+    reader.readAsDataURL(file);
+  });
+};
+
+// Debounce utility
+export const debounce = (func, wait) => {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
+
+// Throttle utility
+export const throttle = (func, limit) => {
+  let inThrottle;
+  return function (...args) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
+  };
 };
