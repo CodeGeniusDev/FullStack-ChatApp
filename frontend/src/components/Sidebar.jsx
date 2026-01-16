@@ -4,6 +4,7 @@ import { useChatStore } from "../store/useChatStore";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import { Users } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
+import { formatLastSeen, truncateText } from "../lib/utils";
 
 const Sidebar = () => {
   const {
@@ -36,11 +37,22 @@ const Sidebar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Refresh unread counts every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getUnreadCounts();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [getUnreadCounts]);
+
   const filteredUsers = showOnlineOnly
     ? users.filter((user) => onlineUsers.includes(user._id))
     : users;
 
-  if (isUsersLoading) return <SidebarSkeleton />;
+  if (isUsersLoading) {
+    return <SidebarSkeleton />;
+  }
 
   return (
     <aside className="h-full w-20 lg:w-72 border-r border-base-300 flex flex-col transition-all duration-200">
@@ -105,54 +117,91 @@ const Sidebar = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto py-3">
-        {filteredUsers.length === 0 ? (
+        {users.length === 0 ? (
           <div className="text-center text-zinc-500 py-8">No users found</div>
         ) : (
           filteredUsers.map((user) => {
             const unreadCount = unreadCounts[user._id] || 0;
             const isOnline = onlineUsers.includes(user._id);
+            const lastMessage = user.lastMessage;
 
             return (
               <button
                 key={user._id}
                 onClick={() => setSelectedUser(user)}
-                className={`w-full p-3 flex items-center gap-3 hover:bg-base-200 ring-1 ring-base-200/50 transition-colors cursor-pointer ${
-                  selectedUser?._id === user._id
-                    ? "bg-base-200 ring-1 ring-base-300"
-                    : ""
-                }`}
+                className={`
+                  w-full p-3 flex items-center gap-3
+                  hover:bg-base-200 ring-1 ring-base-200/50 transition-colors cursor-pointer
+                  ${
+                    selectedUser?._id === user._id
+                      ? "bg-base-200 ring-1 ring-base-300"
+                      : ""
+                  }
+                `}
               >
-                <div className="relative mx-auto lg:mx-0">
+                <div className="relative mx-auto lg:mx-0 flex-shrink-0">
                   <img
                     src={user.profilePic || "/avatar.png"}
                     alt={user.fullName || "User"}
                     className="size-12 object-cover rounded-full"
                   />
                   {isOnline && (
-                    <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full ring-2 ring-base-100" />
+                    <span
+                      className="absolute bottom-0 right-0 size-3 bg-green-500 
+                      rounded-full ring-2 ring-base-100"
+                    />
                   )}
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-primary text-primary-content text-xs font-bold rounded-full h-5 min-w-[20px] flex items-center justify-center px-1">
+                    <span
+                      className="absolute -top-1 -right-1 bg-primary text-primary-content 
+                      text-xs font-bold rounded-full h-5 min-w-[20px] flex items-center 
+                      justify-center px-1"
+                    >
                       {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   )}
                 </div>
 
                 <div className="hidden lg:block text-left min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-1">
                     <div className="font-medium truncate">
                       {user.fullName || "Unknown User"}
                     </div>
-                    {unreadCount > 0 && (
-                      <span className="text-xs text-primary font-bold">
-                        {unreadCount}
+                    {lastMessage && (
+                      <span className="text-xs text-zinc-400 flex-shrink-0 ml-2">
+                        {formatLastSeen(lastMessage.createdAt)}
                       </span>
                     )}
                   </div>
-                  <div className="text-sm text-zinc-400 flex items-center gap-2">
-                    <span>{isOnline ? "Online" : "Offline"}</span>
-                    {unreadCount > 0 && <span className="text-primary">•</span>}
-                  </div>
+
+                  {/* Last message preview */}
+                  {lastMessage ? (
+                    <div className="flex items-center gap-1">
+                      <p
+                        className={`text-sm truncate ${
+                          unreadCount > 0
+                            ? "text-primary font-semibold"
+                            : "text-zinc-400"
+                        }`}
+                      >
+                        {lastMessage.senderId === user._id ? "" : "You: "}
+                        {lastMessage.text
+                          ? truncateText(lastMessage.text, 25)
+                          : lastMessage.image
+                          ? "📷 Photo"
+                          : "Message"}
+                      </p>
+                      {unreadCount > 0 && (
+                        <span className="flex-shrink-0 bg-primary text-primary-content text-xs font-bold rounded-full px-1.5 py-0.5">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-zinc-400">
+                      {isOnline ? "Online" : formatLastSeen(user.lastSeen)}
+                    </div>
+                  )}
                 </div>
               </button>
             );

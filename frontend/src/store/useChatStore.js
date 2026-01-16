@@ -2,6 +2,7 @@ import { create } from "zustand";
 import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "./useAuthStore";
+import { showNotification, requestNotificationPermission } from "../lib/utils";
 
 export const useChatStore = create((set, get) => ({
   messages: [],
@@ -11,7 +12,15 @@ export const useChatStore = create((set, get) => ({
   isMessagesLoading: false,
   unreadCounts: {},
   replyingTo: null,
-  typingUsers: {}, // Changed from isTyping to typingUsers object
+  typingUsers: {},
+  notificationsEnabled: false,
+
+  // Initialize notifications
+  initNotifications: async () => {
+    const granted = await requestNotificationPermission();
+    set({ notificationsEnabled: granted });
+    return granted;
+  },
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -63,18 +72,19 @@ export const useChatStore = create((set, get) => ({
         }
       );
       set({ messages: [...messages, res.data], replyingTo: null });
+      
+      // Refresh user list to update last message
+      get().getUsers();
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error(error.response?.data?.message || "Failed to send message");
     }
   },
 
-  // Mark messages as read
   markMessagesAsRead: async (userId) => {
     try {
       await axiosInstance.put(`/messages/read/${userId}`);
       
-      // Update unread counts
       const { unreadCounts } = get();
       const newCounts = { ...unreadCounts };
       delete newCounts[userId];
@@ -84,44 +94,36 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Delete message
   deleteMessage: async (messageId, deleteForEveryone = false) => {
     try {
       await axiosInstance.delete(`/messages/${messageId}`, {
         data: { deleteForEveryone },
       });
 
-      if (deleteForEveryone) {
-        // Remove from local state
-        set({
-          messages: get().messages.filter((msg) => msg._id !== messageId),
-        });
-      } else {
-        // Just mark as deleted locally
-        set({
-          messages: get().messages.filter((msg) => msg._id !== messageId),
-        });
-      }
+      set({
+        messages: get().messages.filter((msg) => msg._id !== messageId),
+      });
 
       toast.success(
         deleteForEveryone
           ? "Message deleted for everyone"
           : "Message deleted for you"
       );
+      
+      // Refresh user list
+      get().getUsers();
     } catch (error) {
       console.error("Error deleting message:", error);
       toast.error(error.response?.data?.error || "Failed to delete message");
     }
   },
 
-  // Edit message
   editMessage: async (messageId, newText) => {
     try {
       const res = await axiosInstance.put(`/messages/edit/${messageId}`, {
         text: newText,
       });
 
-      // Update in local state
       set({
         messages: get().messages.map((msg) =>
           msg._id === messageId ? res.data : msg
@@ -129,20 +131,21 @@ export const useChatStore = create((set, get) => ({
       });
 
       toast.success("Message edited");
+      
+      // Refresh user list
+      get().getUsers();
     } catch (error) {
       console.error("Error editing message:", error);
       toast.error(error.response?.data?.error || "Failed to edit message");
     }
   },
 
-  // Add reaction
   addReaction: async (messageId, emoji) => {
     try {
       const res = await axiosInstance.post(`/messages/reaction/${messageId}`, {
         emoji,
       });
 
-      // Update in local state
       set({
         messages: get().messages.map((msg) =>
           msg._id === messageId ? { ...msg, reactions: res.data.reactions } : msg
@@ -154,7 +157,6 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Get unread counts
   getUnreadCounts: async () => {
     try {
       const res = await axiosInstance.get("/messages/unread/count");
@@ -168,13 +170,10 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Set replying to message
   setReplyingTo: (message) => set({ replyingTo: message }),
 
-  // Clear replying to
   clearReplyingTo: () => set({ replyingTo: null }),
 
-  // Typing indicator
   setTyping: (isTyping) => {
     const { selectedUser } = get();
     const socket = useAuthStore.getState().socket;
@@ -187,7 +186,6 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  // Listen to incoming messages via Socket.IO
   subscribeToMessages: () => {
     const { selectedUser } = get();
     if (!selectedUser) return;
@@ -197,8 +195,10 @@ export const useChatStore = create((set, get) => ({
 
     // New message
     socket.on("newMessage", (newMessage) => {
+      const { selectedUser: currentSelectedUser, notificationsEnabled } = get();
       const isMessageFromSelectedUser =
-        newMessage.senderId._id === selectedUser._id;
+        newMessage.senderId._id === currentSelectedUser?._id;
+      
       if (!isMessageFromSelectedUser) {
         // Update unread count
         const { unreadCounts } = get();
@@ -209,6 +209,30 @@ export const useChatStore = create((set, get) => ({
               (unreadCounts[newMessage.senderId._id] || 0) + 1,
           },
         });
+        
+        // Show browser notification
+        if (notificationsEnabled && document.hidden) {
+          showNotification(
+            newMessage.senderId.fullName || "New Message",
+            {
+              body: newMessage.text || "Sent you a photo",
+              icon: newMessage.senderId.profilePic || "/avatar.png",
+              tag: `message-${newMessage._id}`,
+            }
+          );
+        }
+        
+        // Show toast notification
+        toast.success(
+          `New message from ${newMessage.senderId.fullName || "User"}`,
+          {
+            duration: 3000,
+          }
+        );
+        
+        // Refresh user list to update last message and sort
+        get().getUsers();
+        
         return;
       }
 
@@ -217,7 +241,10 @@ export const useChatStore = create((set, get) => ({
       });
 
       // Auto mark as read
-      get().markMessagesAsRead(selectedUser._id);
+      get().markMessagesAsRead(currentSelectedUser._id);
+      
+      // Refresh user list
+      get().getUsers();
     });
 
     // Message delivered
@@ -248,6 +275,7 @@ export const useChatStore = create((set, get) => ({
         set({
           messages: get().messages.filter((msg) => msg._id !== messageId),
         });
+        get().getUsers();
       }
     });
 
@@ -258,6 +286,7 @@ export const useChatStore = create((set, get) => ({
           msg._id === editedMessage._id ? editedMessage : msg
         ),
       });
+      get().getUsers();
     });
 
     // Reaction added
@@ -269,7 +298,7 @@ export const useChatStore = create((set, get) => ({
       });
     });
 
-    // Typing indicator - track by userId
+    // Typing indicator
     socket.on("userTyping", ({ senderId, isTyping }) => {
       set({
         typingUsers: {

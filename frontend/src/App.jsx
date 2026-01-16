@@ -8,6 +8,7 @@ import Profile from "./pages/Profile";
 
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/useAuthStore";
+import { useChatStore } from "./store/useChatStore";
 import { useThemeStore } from "./store/useThemeStore";
 import { useEffect } from "react";
 
@@ -16,6 +17,7 @@ import { Toaster } from "react-hot-toast";
 
 const App = () => {
   const { authUser, checkAuth, isCheckingAuth, onlineUsers } = useAuthStore();
+  const { initNotifications } = useChatStore();
   const { theme } = useThemeStore();
 
   console.log({ onlineUsers });
@@ -23,6 +25,13 @@ const App = () => {
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Initialize notifications when user is authenticated
+  useEffect(() => {
+    if (authUser) {
+      initNotifications();
+    }
+  }, [authUser, initNotifications]);
 
   console.log({ authUser });
 

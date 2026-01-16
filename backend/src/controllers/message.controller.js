@@ -6,11 +6,40 @@ export const getUsersForSidebar = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
 
-    const filteredUsers = await User.find({ _id: { $ne: loggedInUserId } })
+    // Get all users except the logged-in user
+    const allUsers = await User.find({ _id: { $ne: loggedInUserId } })
       .select("-password")
-      .sort({ createdAt: -1 });
+      .lean();
 
-    res.status(200).json(filteredUsers);
+    // Get the last message for each conversation
+    const usersWithLastMessage = await Promise.all(
+      allUsers.map(async (user) => {
+        const lastMessage = await Message.findOne({
+          $or: [
+            { senderId: loggedInUserId, receiverId: user._id },
+            { senderId: user._id, receiverId: loggedInUserId },
+          ],
+          deletedFor: { $ne: loggedInUserId },
+        })
+          .sort({ createdAt: -1 })
+          .select("text image createdAt senderId")
+          .lean();
+
+        return {
+          ...user,
+          lastMessage: lastMessage || null,
+        };
+      })
+    );
+
+    // Sort users by last message timestamp (most recent first)
+    usersWithLastMessage.sort((a, b) => {
+      const aTime = a.lastMessage?.createdAt || a.createdAt;
+      const bTime = b.lastMessage?.createdAt || b.createdAt;
+      return new Date(bTime) - new Date(aTime);
+    });
+
+    res.status(200).json(usersWithLastMessage);
   } catch (error) {
     console.error("Error in getUsersForSidebar:", error);
     res.status(500).json({ error: error.message });
@@ -27,7 +56,7 @@ export const getMessages = async (req, res) => {
         { senderId: senderId, receiverId: userToChatId },
         { senderId: userToChatId, receiverId: senderId },
       ],
-      deletedFor: { $ne: senderId }, // Exclude messages deleted by current user
+      deletedFor: { $ne: senderId },
     })
       .sort({ createdAt: 1 })
       .populate("senderId", "fullName profilePic")
@@ -155,7 +184,6 @@ export const deleteMessage = async (req, res) => {
     }
 
     if (deleteForEveryone) {
-      // Only sender can delete for everyone (within 1 hour)
       if (message.senderId.toString() !== userId.toString()) {
         return res.status(403).json({ error: "Unauthorized" });
       }
@@ -169,7 +197,6 @@ export const deleteMessage = async (req, res) => {
 
       await Message.findByIdAndDelete(messageId);
 
-      // Emit deletion to receiver
       const io = req.app.get("io");
       const receiverSocketId =
         req.app.get("userSocketMap")?.[message.receiverId];
@@ -182,7 +209,6 @@ export const deleteMessage = async (req, res) => {
 
       res.status(200).json({ message: "Message deleted for everyone" });
     } else {
-      // Delete for self
       message.deletedFor.push(userId);
       await message.save();
 
@@ -211,7 +237,6 @@ export const editMessage = async (req, res) => {
       return res.status(403).json({ error: "Unauthorized" });
     }
 
-    // Can only edit within 15 minutes
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     if (message.createdAt < fifteenMinutesAgo) {
       return res
@@ -227,7 +252,6 @@ export const editMessage = async (req, res) => {
     await message.populate("senderId", "fullName profilePic");
     await message.populate("receiverId", "fullName profilePic");
 
-    // Emit edit to receiver
     const io = req.app.get("io");
     const receiverSocketId = req.app.get("userSocketMap")?.[message.receiverId];
     if (receiverSocketId) {
@@ -254,18 +278,15 @@ export const addReaction = async (req, res) => {
       return res.status(404).json({ error: "Message not found" });
     }
 
-    // Remove previous reaction from this user
     message.reactions = message.reactions.filter(
       (r) => r.userId.toString() !== userId.toString()
     );
 
-    // Add new reaction
     message.reactions.push({ userId, emoji });
     await message.save();
 
     await message.populate("reactions.userId", "fullName");
 
-    // Emit reaction update
     const io = req.app.get("io");
     const otherUserId =
       message.senderId.toString() === userId.toString()
