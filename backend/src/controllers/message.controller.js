@@ -190,9 +190,7 @@ export const deleteMessage = async (req, res) => {
 
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
       if (message.createdAt < oneHourAgo) {
-        return res
-          .status(400)
-          .json({ error: "Can only delete within 1 hour" });
+        return res.status(400).json({ error: "Can only delete within 1 hour" });
       }
 
       await Message.findByIdAndDelete(messageId);
@@ -239,9 +237,7 @@ export const editMessage = async (req, res) => {
 
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     if (message.createdAt < fifteenMinutesAgo) {
-      return res
-        .status(400)
-        .json({ error: "Can only edit within 15 minutes" });
+      return res.status(400).json({ error: "Can only edit within 15 minutes" });
     }
 
     message.text = text;
