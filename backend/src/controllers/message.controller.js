@@ -130,8 +130,13 @@ export const sendMessage = async (req, res) => {
     const io = req.app.get("io");
     const receiverSocketId = req.app.get("userSocketMap")?.[receiverId];
 
+    // Send to receiver immediately if online
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newMessage", newMessage);
+      
+      // Update status to delivered if receiver is online
+      newMessage.status = "delivered";
+      await newMessage.save();
     }
 
     res.status(201).json(newMessage);

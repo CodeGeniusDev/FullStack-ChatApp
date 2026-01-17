@@ -1,11 +1,17 @@
 import { useChatStore } from "../store/useChatStore";
+import { useEffect } from "react";
 
 import Sidebar from "../components/Sidebar.jsx";
 import NoChatSelected from "../components/NoChatSelected.jsx";
 import ChatContainer from "../components/ChatContainer.jsx";
 
 const HomePage = () => {
-  const { selectedUser } = useChatStore();
+  const { selectedUser, initNotifications } = useChatStore();
+
+  // Initialize notifications on mount
+  useEffect(() => {
+    initNotifications();
+  }, [initNotifications]);
 
   return (
     <div className="relative h-screen">

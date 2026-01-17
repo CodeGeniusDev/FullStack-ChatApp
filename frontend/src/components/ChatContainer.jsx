@@ -1,15 +1,16 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import MessageSkeleton from "./skeletons/MessageSkeleton";
 import ChatHeader from "./ChatHeader";
 import MessagesInput from "./MessagesInput";
 import { formatMessageTime } from "../lib/utils";
-import { Check, CheckCheck, Reply, Trash2, Edit, Copy, X } from "lucide-react";
-import { Star, Share2, Download, MoreVertical } from "lucide-react";
+import { Check, CheckCheck, Reply, Trash2, Edit, Copy } from "lucide-react";
+import ChatProfileOpener from "./ChatProfileOpener";
+import ImageModel from "./ImageModel";
 
-const ChatContainer = () => {
+const ChatContainer = ({ onClose, user, message }) => {
   const {
     messages,
     getMessages,
@@ -25,17 +26,44 @@ const ChatContainer = () => {
 
   const { authUser } = useAuthStore();
   const messageEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [hoveredMessage, setHoveredMessage] = useState(null);
   const [imageModal, setImageModal] = useState(null);
-  // const [longPress, setLongPress] = useState(null);
+  const [imageZoom, setImageZoom] = useState(1);
+  const [imageRotation, setImageRotation] = useState(0);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const previousMessagesLength = useRef(0);
+  const isInitialLoad = useRef(true);
 
   // Check if the selected user is typing (not yourself!)
   const isOtherUserTyping = typingUsers[selectedUser?._id] || false;
 
+  // Check if user is near bottom of chat
+  const checkIfNearBottom = useCallback(() => {
+    if (!messagesContainerRef.current) return true;
+
+    const { scrollTop, scrollHeight, clientHeight } =
+      messagesContainerRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+    // Consider "near bottom" if within 100px of the bottom
+    return distanceFromBottom < 100;
+  }, []);
+
+  // Scroll to bottom function
+  const scrollToBottom = useCallback((behavior = "smooth") => {
+    if (messageEndRef.current) {
+      messageEndRef.current.scrollIntoView({ behavior, block: "end" });
+    }
+  }, []);
+
+  // Load messages when user changes
   useEffect(() => {
     if (selectedUser?._id) {
+      isInitialLoad.current = true;
       getMessages(selectedUser._id);
       subscribeToMessages();
     }
@@ -48,11 +76,56 @@ const ChatContainer = () => {
     unsubscribeFromMessages,
   ]);
 
+  // Handle scrolling ONLY when appropriate
   useEffect(() => {
-    if (messageEndRef.current && messages) {
-      messageEndRef.current.scrollIntoView({ behavior: "smooth" });
+    // Don't scroll if loading
+    if (isMessagesLoading) return;
+
+    const messagesLength = messages.length;
+    const hasNewMessages = messagesLength > previousMessagesLength.current;
+
+    // Initial load - scroll instantly to bottom
+    if (isInitialLoad.current && messagesLength > 0) {
+      setTimeout(() => {
+        scrollToBottom("auto");
+        isInitialLoad.current = false;
+        previousMessagesLength.current = messagesLength;
+      }, 0);
+      return;
     }
-  }, [messages]);
+
+    // New message arrived
+    if (hasNewMessages) {
+      const wasNearBottom = checkIfNearBottom();
+
+      // Only auto-scroll if user was already near the bottom
+      if (wasNearBottom || shouldAutoScroll) {
+        setTimeout(() => scrollToBottom("smooth"), 50);
+      }
+
+      previousMessagesLength.current = messagesLength;
+    }
+  }, [
+    messages,
+    isMessagesLoading,
+    scrollToBottom,
+    checkIfNearBottom,
+    shouldAutoScroll,
+  ]);
+
+  // Track scroll position to determine auto-scroll behavior
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const isNearBottom = checkIfNearBottom();
+      setShouldAutoScroll(isNearBottom);
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [checkIfNearBottom]);
 
   const handleContextMenu = (e, message) => {
     e.preventDefault();
@@ -78,12 +151,56 @@ const ChatContainer = () => {
     setContextMenu(null);
   };
 
-  const handleReaction = async (messageId, emoji) => {
-    await addReaction(messageId, emoji);
+  // FIXED: Prevent auto-scroll on reaction
+  const handleReaction = useCallback(
+    async (messageId, emoji) => {
+      // Store current scroll position
+      const container = messagesContainerRef.current;
+      const scrollTop = container?.scrollTop || 0;
+
+      await addReaction(messageId, emoji);
+
+      // Restore scroll position after reaction
+      if (container) {
+        container.scrollTop = scrollTop;
+      }
+    },
+    [addReaction]
+  );
+
+  const handleImageClick = (message) => {
+    setImageModal(message);
+    setImageZoom(1);
+    setImageRotation(0);
   };
 
-  const handleImageClick = (imageUrl) => {
-    setImageModal(imageUrl);
+  const handleDownload = () => {
+    if (!imageModal) return;
+
+    const link = document.createElement("a");
+    link.href = imageModal;
+    link.download = `image_${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleShare = async () => {
+    if (!imageModal) return;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Shared Image",
+          url: imageModal,
+        });
+      } catch (error) {
+        console.error("Error sharing:", error);
+      }
+    } else {
+      navigator.clipboard.writeText(imageModal);
+      alert("Image URL copied to clipboard!");
+    }
   };
 
   const getStatusIcon = (status) => {
@@ -99,7 +216,6 @@ const ChatContainer = () => {
     }
   };
 
-  // Function to make links clickable
   const renderMessageText = (text) => {
     if (!text) return null;
 
@@ -128,17 +244,10 @@ const ChatContainer = () => {
     });
   };
 
-  // const handleTouchStart = (messageId) => {
-  //   pressTimer.current = setTimeout(() => {
-  //     setLongPress(messageId);
-  //   }, 500); // 500ms delay for long press
-  // };
-  // const handleTouchEnd = () => {
-  //   clearTimeout(pressTimer.current);
-  //   setTimeout(() => {
-  //     setLongPress(null);
-  //   }, 2000); // Hide after 2 seconds
-  // };
+  const closeImageModal = (e) => {
+    e?.stopPropagation();
+    setImageModal(null);
+  };
 
   const reactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
@@ -154,11 +263,14 @@ const ChatContainer = () => {
 
   return (
     <>
-      <div className="flex-1 flex flex-col overflow-auto">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <ChatHeader />
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
+        {/* Messages - FIXED: Added ref to track scroll */}
+        <div
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
+        >
           {messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <p className="text-zinc-500">
@@ -170,6 +282,12 @@ const ChatContainer = () => {
               {messages.map((message) => {
                 const isOwnMessage = message.senderId._id === authUser._id;
 
+                const handleProfileClick = (e) => {
+                  e.stopPropagation();
+                  setIsProfileOpen(true);
+                  document.activeElement?.blur();
+                };
+
                 return (
                   <div
                     key={message._id}
@@ -180,18 +298,21 @@ const ChatContainer = () => {
                     onMouseLeave={() => setHoveredMessage(null)}
                     onContextMenu={(e) => handleContextMenu(e, message)}
                   >
-                    <div className="chat-image avatar">
-                      <div className="size-10 rounded-full border">
-                        <img
-                          src={
-                            isOwnMessage
-                              ? authUser.profilePic || "/avatar.png"
-                              : message.senderId.profilePic || "/avatar.png"
-                          }
-                          alt="profile pic"
-                        />
+                    {!isOwnMessage && (
+                      <div className="chat-image avatar">
+                        <div
+                          className="size-10 rounded-full cursor-pointer"
+                          tabIndex={0}
+                          role="button"
+                          onClick={handleProfileClick}
+                        >
+                          <img
+                            src={message.senderId.profilePic || "/avatar.png"}
+                            alt="profile pic"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div className="chat-header mb-1 flex items-center gap-2">
                       <time className="text-xs opacity-50">
@@ -204,7 +325,6 @@ const ChatContainer = () => {
 
                     <div className="relative group">
                       <div className="chat-bubble flex flex-col max-w-xs lg:max-w-md">
-                        {/* Reply preview */}
                         {message.replyTo && (
                           <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
                             <p className="font-semibold text-xs">
@@ -221,7 +341,7 @@ const ChatContainer = () => {
                             src={message.image}
                             alt="Attachment"
                             className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => handleImageClick(message.image)}
+                            onClick={() => handleImageClick(message)}
                           />
                         )}
 
@@ -231,7 +351,6 @@ const ChatContainer = () => {
                           </p>
                         )}
 
-                        {/* Message status (only for own messages) */}
                         {isOwnMessage && (
                           <div className="flex items-center justify-end gap-1 mt-1">
                             {getStatusIcon(message.status)}
@@ -239,9 +358,7 @@ const ChatContainer = () => {
                         )}
                       </div>
 
-                      {/* message reactions */}
                       <div className="absolute -bottom-4 right-0">
-                        {/* Reactions */}
                         {message.reactions && message.reactions.length > 0 && (
                           <div className="flex gap-1 mt-1 flex-wrap">
                             {message.reactions.map((reaction, idx) => (
@@ -257,7 +374,7 @@ const ChatContainer = () => {
                         )}
                       </div>
 
-                      {/* Quick reactions */}
+                      {/* Quick reactions - FIXED: Using useCallback */}
                       {hoveredMessage === message._id && (
                         <div
                           className={`absolute ${
@@ -267,7 +384,10 @@ const ChatContainer = () => {
                           {reactionEmojis.map((emoji) => (
                             <button
                               key={emoji}
-                              onClick={() => handleReaction(message._id, emoji)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReaction(message._id, emoji);
+                              }}
                               onMouseEnter={() =>
                                 setHoveredMessage(message._id)
                               }
@@ -283,7 +403,6 @@ const ChatContainer = () => {
                 );
               })}
 
-              {/* Typing indicator - only show if OTHER user is typing */}
               {isOtherUserTyping && (
                 <div className="chat chat-start">
                   <div className="chat-image avatar">
@@ -391,54 +510,18 @@ const ChatContainer = () => {
 
       {/* Image Modal */}
       {imageModal && (
-        <div className="fixed inset-0 z-50 bg-black/90">
-          {/* Header */}
-          <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-4 text-white backdrop-blur-lg bg-black/20">
-            {/* Left */}
-            <div className="flex items-center gap-3">
-              <button
-                className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none"
-                onClick={() => setImageModal(null)}
-              >
-                <X className="w-6 h-6" />
-              </button>
+        <ImageModel
+          onClose={closeImageModal}
+          user={selectedUser}
+          message={imageModal}
+        />
+      )}
 
-              <div className="flex flex-col leading-tight">
-                <span className="text-sm font-medium">Image</span>
-                <span className="text-xs text-gray-300">Preview</span>
-              </div>
-            </div>
-
-            {/* Right actions */}
-            <div className="flex items-center gap-2">
-              <button className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none">
-                <Star className="w-5 h-5" />
-              </button>
-
-              <button className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none">
-                <Share2 className="w-5 h-5" />
-              </button>
-
-              <button className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none">
-                <Download className="w-5 h-5" />
-              </button>
-
-              <button className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none">
-                <MoreVertical className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Image container */}
-          <div className="flex items-center justify-center h-full pt-16 pb-6 px-4">
-            <img
-              src={imageModal}
-              alt="Full size"
-              className="max-w-full max-h-full object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
+      {isProfileOpen && selectedUser && (
+        <ChatProfileOpener
+          onClose={() => setIsProfileOpen(false)}
+          user={selectedUser}
+        />
       )}
     </>
   );

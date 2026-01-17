@@ -82,6 +82,33 @@ export const useChatStore = create((set, get) => ({
       return;
     }
 
+    const authUser = useAuthStore.getState().authUser;
+    
+    // Create optimistic message for instant UI update
+    const optimisticMessage = {
+      _id: `temp-${Date.now()}`,
+      text: messageData.text,
+      image: messageData.image,
+      senderId: {
+        _id: authUser._id,
+        fullName: authUser.fullName,
+        profilePic: authUser.profilePic,
+      },
+      receiverId: {
+        _id: selectedUser._id,
+        fullName: selectedUser.fullName,
+        profilePic: selectedUser.profilePic,
+      },
+      replyTo: replyingTo || null,
+      status: "sent",
+      createdAt: new Date().toISOString(),
+      reactions: [],
+      isEdited: false,
+    };
+
+    // Instantly add to UI for fast feedback
+    set({ messages: [...messages, optimisticMessage], replyingTo: null });
+
     try {
       const res = await axiosInstance.post(
         `/messages/send/${selectedUser._id}`,
@@ -90,7 +117,13 @@ export const useChatStore = create((set, get) => ({
           replyTo: replyingTo?._id || null,
         }
       );
-      set({ messages: [...messages, res.data], replyingTo: null });
+      
+      // Replace optimistic message with real one
+      set({
+        messages: get().messages.map((msg) =>
+          msg._id === optimisticMessage._id ? res.data : msg
+        ),
+      });
       
       // Update sidebar locally without reload
       get().updateUserLastMessage(selectedUser._id, {
@@ -101,6 +134,14 @@ export const useChatStore = create((set, get) => ({
       });
     } catch (error) {
       console.error("Error sending message:", error);
+      
+      // Remove optimistic message on error
+      set({
+        messages: get().messages.filter(
+          (msg) => msg._id !== optimisticMessage._id
+        ),
+      });
+      
       toast.error(error.response?.data?.message || "Failed to send message");
     }
   },

@@ -67,7 +67,7 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
-// Socket.IO connection handling
+// Socket.IO connection handling with improved real-time messaging
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
   
@@ -80,15 +80,16 @@ io.on('connection', (socket) => {
     User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => 
       console.error('Error updating lastSeen on connect:', err)
     );
+    
+    // Emit online users to all connected clients immediately
+    io.emit("getOnlineUsers", Object.keys(userSocketMap));
   }
 
-  // Emit online users to all connected clients
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
-
-  // Handle typing indicator
+  // Handle typing indicator with immediate emission
   socket.on('typing', ({ receiverId, isTyping }) => {
     const receiverSocketId = userSocketMap[receiverId];
     if (receiverSocketId) {
+      // Send immediately, no buffering
       io.to(receiverSocketId).emit('userTyping', {
         senderId: userId,
         isTyping,

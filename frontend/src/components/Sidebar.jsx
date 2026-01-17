@@ -2,15 +2,15 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useChatStore } from "../store/useChatStore";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
-import { Users, GripVertical, Menu, X } from "lucide-react";
+import { Users, Search, X } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatLastSeen, truncateText } from "../lib/utils";
 
 // Default and constraints for sidebar width
 const SIDEBAR = {
-  MIN_WIDTH: 240,
+  MIN_WIDTH: 280,
   MAX_WIDTH: 500,
-  DEFAULT_WIDTH: 280,
+  DEFAULT_WIDTH: 340,
   STORAGE_KEY: "chat-sidebar-width",
 };
 
@@ -65,6 +65,7 @@ const Sidebar = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isMobileOpen]);
+  
   const dropdownRef = useRef(null);
   const sidebarRef = useRef(null);
 
@@ -120,11 +121,11 @@ const Sidebar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Refresh unread counts every 30 seconds
+  // Refresh unread counts every 10 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       getUnreadCounts();
-    }, 30000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [getUnreadCounts]);
@@ -155,15 +156,6 @@ const Sidebar = () => {
 
   return (
     <>
-      {/* Mobile Menu Button */}
-      <button
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="fixed bottom-4 right-4 lg:hidden z-50 p-3 bg-primary text-primary-content rounded-full shadow-lg border-2 border-primary cursor-pointer"
-        aria-label="Toggle sidebar"
-      >
-        {isMobileOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
-
       {/* Mobile Overlay */}
       {isMobileOpen && (
         <div
@@ -180,11 +172,11 @@ const Sidebar = () => {
               ? "translate-x-0"
               : "-translate-x-full lg:translate-x-0"
           }
-           w-[85vw] sm:w-[320px] lg:w-[${sidebarWidth}px] min-w-[240px] max-w-[500px]`}
+           w-[85vw] sm:w-[320px] lg:w-[${sidebarWidth}px] min-w-[280px] max-w-[500px]`}
         style={{
           "--sidebar-width": `${sidebarWidth}px`,
           width: isMobileOpen ? "80vw" : "var(--sidebar-width)",
-          minWidth: "240px",
+          minWidth: "280px",
           maxWidth: "500px",
         }}
       >
@@ -254,27 +246,24 @@ const Sidebar = () => {
         {/* Search Bar */}
         <div className="px-3 py-2 border-b border-base-300">
           <div className="relative">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
+              <Search className="w-4 h-4" />
+            </div>
             <input
               type="text"
               placeholder="Search contacts..."
-              className="w-full bg-base-200 rounded-lg px-4 py-2 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="w-full bg-base-200 rounded-lg px-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <svg
-              className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -287,6 +276,7 @@ const Sidebar = () => {
               const unreadCount = unreadCounts[user._id] || 0;
               const isOnline = onlineUsers.includes(user._id);
               const lastMessage = user.lastMessage;
+              const isSelected = selectedUser?._id === user._id;
 
               return (
                 <button
@@ -296,7 +286,7 @@ const Sidebar = () => {
                   w-full p-3 flex items-center gap-3
                   hover:bg-base-200 ring-1 border-l-4 border-base-100 ring-base-200 transition-colors cursor-pointer
                   ${
-                    selectedUser?._id === user._id
+                    isSelected
                       ? "bg-base-200 border-l-4 border-l-primary"
                       : "border-l-4 border-l-transparent"
                   }
@@ -352,7 +342,7 @@ const Sidebar = () => {
                         >
                           {lastMessage.senderId === user._id ? "" : "You: "}
                           {lastMessage.text
-                            ? truncateText(lastMessage.text, 25)
+                            ? truncateText(lastMessage.text, 30)
                             : lastMessage.image
                             ? "📷 Photo"
                             : "Message"}
@@ -377,7 +367,7 @@ const Sidebar = () => {
 
         {/* Resize handle */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/50 active:bg-primary/70 transition-colors duration-200 z-20"
+          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/50 active:bg-primary/70 transition-colors duration-200 z-20 hidden lg:block"
           onMouseDown={startResizing}
           title="Drag to resize"
         >
@@ -392,6 +382,15 @@ const Sidebar = () => {
           style={{ cursor: "col-resize" }}
         />
       )}
+
+      {/* Mobile floating button */}
+      <button
+        onClick={() => setIsMobileOpen(!isMobileOpen)}
+        className="fixed bottom-4 right-4 lg:hidden z-50 p-3 bg-primary text-primary-content rounded-full shadow-lg border-2 border-primary cursor-pointer mobile-menu-button"
+        aria-label="Toggle sidebar"
+      >
+        {isMobileOpen ? <X size={24} /> : <Users size={24} />}
+      </button>
     </>
   );
 };
