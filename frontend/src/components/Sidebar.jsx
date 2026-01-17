@@ -328,7 +328,7 @@ const Sidebar = () => {
                     )}
                   </div>
 
-                  <div className="hidden lg:block text-left min-w-0 flex-1">
+                  <div className="block text-left min-w-0 flex-1">
                     <div className="flex items-center justify-between mb-1">
                       <div className="font-medium truncate">
                         {user.fullName || "Unknown User"}
