@@ -38,21 +38,31 @@ export const useChatStore = create((set, get) => ({
 
   // Update user's last message locally without full reload
   updateUserLastMessage: (userId, message) => {
-    set((state) => ({
-      users: state.users.map((user) => {
+    set((state) => {
+      const updatedUsers = state.users.map((user) => {
         if (user._id === userId) {
           return {
             ...user,
-            lastMessage: message,
+            lastMessage: {
+              text: message.text,
+              image: message.image,
+              createdAt: message.createdAt,
+              senderId: message.senderId,
+            },
           };
         }
         return user;
-      }).sort((a, b) => {
+      });
+
+      // Sort users by last message time
+      const sortedUsers = [...updatedUsers].sort((a, b) => {
         const aTime = a.lastMessage?.createdAt || a.createdAt;
         const bTime = b.lastMessage?.createdAt || b.createdAt;
         return new Date(bTime) - new Date(aTime);
-      }),
-    }));
+      });
+
+      return { users: sortedUsers };
+    });
   },
 
   getMessages: async (userId) => {
@@ -83,7 +93,7 @@ export const useChatStore = create((set, get) => ({
     }
 
     const authUser = useAuthStore.getState().authUser;
-    
+
     // Create optimistic message for instant UI update
     const optimisticMessage = {
       _id: `temp-${Date.now()}`,
@@ -106,8 +116,16 @@ export const useChatStore = create((set, get) => ({
       isEdited: false,
     };
 
-    // Instantly add to UI for fast feedback
+    // Instantly add to UI and update sidebar
     set({ messages: [...messages, optimisticMessage], replyingTo: null });
+
+    // Immediately update sidebar with optimistic message
+    get().updateUserLastMessage(selectedUser._id, {
+      text: optimisticMessage.text,
+      image: optimisticMessage.image,
+      createdAt: optimisticMessage.createdAt,
+      senderId: authUser._id,
+    });
 
     try {
       const res = await axiosInstance.post(
@@ -117,15 +135,15 @@ export const useChatStore = create((set, get) => ({
           replyTo: replyingTo?._id || null,
         }
       );
-      
+
       // Replace optimistic message with real one
       set({
         messages: get().messages.map((msg) =>
           msg._id === optimisticMessage._id ? res.data : msg
         ),
       });
-      
-      // Update sidebar locally without reload
+
+      // Update sidebar with real message data
       get().updateUserLastMessage(selectedUser._id, {
         text: res.data.text,
         image: res.data.image,
@@ -134,14 +152,25 @@ export const useChatStore = create((set, get) => ({
       });
     } catch (error) {
       console.error("Error sending message:", error);
-      
+
       // Remove optimistic message on error
       set({
         messages: get().messages.filter(
           (msg) => msg._id !== optimisticMessage._id
         ),
       });
-      
+
+      // Revert sidebar update on error
+      const previousMessage = messages[messages.length - 1];
+      if (previousMessage) {
+        get().updateUserLastMessage(selectedUser._id, {
+          text: previousMessage.text,
+          image: previousMessage.image,
+          createdAt: previousMessage.createdAt,
+          senderId: previousMessage.senderId._id || previousMessage.senderId,
+        });
+      }
+
       toast.error(error.response?.data?.message || "Failed to send message");
     }
   },
@@ -149,7 +178,7 @@ export const useChatStore = create((set, get) => ({
   markMessagesAsRead: async (userId) => {
     try {
       await axiosInstance.put(`/messages/read/${userId}`);
-      
+
       const { unreadCounts } = get();
       const newCounts = { ...unreadCounts };
       delete newCounts[userId];
@@ -174,7 +203,7 @@ export const useChatStore = create((set, get) => ({
           ? "Message deleted for everyone"
           : "Message deleted for you"
       );
-      
+
       // Refresh user list only for deletions
       get().getUsers();
     } catch (error) {
@@ -196,7 +225,7 @@ export const useChatStore = create((set, get) => ({
       });
 
       toast.success("Message edited");
-      
+
       // Update sidebar last message if it's the edited one
       const { selectedUser } = get();
       if (selectedUser) {
@@ -224,7 +253,9 @@ export const useChatStore = create((set, get) => ({
 
       set({
         messages: get().messages.map((msg) =>
-          msg._id === messageId ? { ...msg, reactions: res.data.reactions } : msg
+          msg._id === messageId
+            ? { ...msg, reactions: res.data.reactions }
+            : msg
         ),
       });
     } catch (error) {
@@ -253,7 +284,7 @@ export const useChatStore = create((set, get) => ({
   setTyping: (isTyping) => {
     const { selectedUser } = get();
     const socket = useAuthStore.getState().socket;
-    
+
     if (socket && selectedUser) {
       socket.emit("typing", {
         receiverId: selectedUser._id,
@@ -274,7 +305,15 @@ export const useChatStore = create((set, get) => ({
       const { selectedUser: currentSelectedUser, notificationsEnabled } = get();
       const isMessageFromSelectedUser =
         newMessage.senderId._id === currentSelectedUser?._id;
-      
+
+      // ALWAYS update sidebar for any new message
+      get().updateUserLastMessage(newMessage.senderId._id, {
+        text: newMessage.text,
+        image: newMessage.image,
+        createdAt: newMessage.createdAt,
+        senderId: newMessage.senderId._id,
+      });
+
       if (!isMessageFromSelectedUser) {
         // Update unread count
         const { unreadCounts } = get();
@@ -285,27 +324,16 @@ export const useChatStore = create((set, get) => ({
               (unreadCounts[newMessage.senderId._id] || 0) + 1,
           },
         });
-        
-        // Update sidebar with new message
-        get().updateUserLastMessage(newMessage.senderId._id, {
-          text: newMessage.text,
-          image: newMessage.image,
-          createdAt: newMessage.createdAt,
-          senderId: newMessage.senderId._id,
-        });
-        
+
         // Show browser notification
         if (notificationsEnabled && document.hidden) {
-          showNotification(
-            newMessage.senderId.fullName || "New Message",
-            {
-              body: newMessage.text || "Sent you a photo",
-              icon: newMessage.senderId.profilePic || "/avatar.png",
-              tag: `message-${newMessage._id}`,
-            }
-          );
+          showNotification(newMessage.senderId.fullName || "New Message", {
+            body: newMessage.text || "Sent you a photo",
+            icon: newMessage.senderId.profilePic || "/avatar.png",
+            tag: `message-${newMessage._id}`,
+          });
         }
-        
+
         // Show toast notification
         toast.success(
           `New message from ${newMessage.senderId.fullName || "User"}`,
@@ -313,10 +341,11 @@ export const useChatStore = create((set, get) => ({
             duration: 3000,
           }
         );
-        
+
         return;
       }
 
+      // Add message to chat if it's from the selected user
       set({
         messages: [...get().messages, newMessage],
       });
@@ -340,9 +369,7 @@ export const useChatStore = create((set, get) => ({
     socket.on("messagesRead", ({ userId }) => {
       set({
         messages: get().messages.map((msg) =>
-          msg.receiverId._id === userId
-            ? { ...msg, status: "read" }
-            : msg
+          msg.receiverId._id === userId ? { ...msg, status: "read" } : msg
         ),
       });
     });

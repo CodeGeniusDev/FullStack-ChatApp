@@ -322,6 +322,8 @@ const Sidebar = () => {
                             ? truncateText(lastMessage.text, 30)
                             : lastMessage.image
                             ? "📷 Photo"
+                            : lastMessage.emoji
+                            ? "😊 Emoji"
                             : "Message"}
                         </p>
                         {unreadCount > 0 && (

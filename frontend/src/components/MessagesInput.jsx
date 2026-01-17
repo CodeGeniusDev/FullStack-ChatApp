@@ -74,27 +74,38 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
 
     if (!text.trim() && !imagePreview) return;
 
+    // Store values before clearing
+    const messageText = text.trim();
+    const messageImage = imagePreview;
+
+    // IMMEDIATELY clear input for instant feedback
+    setText("");
+    setImagePreview(null);
+    setTyping(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+
     try {
       if (editingMessage) {
-        await editMessage(editingMessage._id, text.trim());
+        await editMessage(editingMessage._id, messageText);
         setEditingMessage(null);
       } else {
         await sendMessage({
-          text: text.trim(),
-          image: imagePreview,
+          text: messageText,
+          image: messageImage,
         });
-      }
-
-      setText("");
-      setImagePreview(null);
-      fileInputRef.current && (fileInputRef.current.value = "");
-      setTyping(false);
-
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
       }
     } catch (error) {
       console.error("Failed to send/edit message:", error);
+      // On error, restore the text
+      setText(messageText);
+      setImagePreview(messageImage);
     }
   };
 
