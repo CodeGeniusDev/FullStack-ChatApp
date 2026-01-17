@@ -314,90 +314,95 @@ const ChatContainer = ({ onClose, user, message }) => {
                       </div>
                     )}
 
-                    <div className="chat-header mb-1 flex items-center gap-2">
-                      <time className="text-xs opacity-50">
-                        {formatMessageTime(message.createdAt)}
-                      </time>
-                      {message.isEdited && (
-                        <span className="text-xs opacity-50">(edited)</span>
-                      )}
-                    </div>
+                    <div className="">
+                      <div className="relative group">
+                        <div className="chat-bubble bg-base-200 flex flex-col max-w-xs lg:max-w-md">
+                          {message.replyTo && (
+                            <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
+                              <p className="font-semibold text-xs">
+                                {message.replyTo.senderId.fullName}
+                              </p>
+                              <p className="truncate opacity-70">
+                                {message.replyTo.text || "Image"}
+                              </p>
+                            </div>
+                          )}
 
-                    <div className="relative group">
-                      <div className="chat-bubble flex flex-col max-w-xs lg:max-w-md">
-                        {message.replyTo && (
-                          <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
-                            <p className="font-semibold text-xs">
-                              {message.replyTo.senderId.fullName}
+                          {message.image && (
+                            <img
+                              src={message.image}
+                              alt="Attachment"
+                              className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => handleImageClick(message)}
+                            />
+                          )}
+
+                          {message.text && (
+                            <p className="wrap-break whitespace-pre-wrap">
+                              {renderMessageText(message.text)}
                             </p>
-                            <p className="truncate opacity-70">
-                              {message.replyTo.text || "Image"}
-                            </p>
+                          )}
+
+                          <div className="flex items-center justify-between gap-2 w-full pt-1">
+                            <div className="flex-1 flex items-center">
+                              {message.isEdited && (
+                                <span className="text-xs opacity-50">
+                                  (edited)
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <time className="text-xs opacity-50">
+                                {formatMessageTime(message.createdAt)}
+                              </time>
+                              {isOwnMessage && getStatusIcon(message.status)}
+                            </div>
                           </div>
-                        )}
+                        </div>
 
-                        {message.image && (
-                          <img
-                            src={message.image}
-                            alt="Attachment"
-                            className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => handleImageClick(message)}
-                          />
-                        )}
+                        <div className="absolute -bottom-4 right-0">
+                          {message.reactions &&
+                            message.reactions.length > 0 && (
+                              <div className="flex gap-1 mt-1 flex-wrap">
+                                {message.reactions.map((reaction, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="text-sm bg-base-200 border border-base-300 px-1.5 py-0.5 rounded-full"
+                                    title={reaction.userId.fullName}
+                                  >
+                                    {reaction.emoji}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                        </div>
 
-                        {message.text && (
-                          <p className="wrap-break whitespace-pre-wrap">
-                            {renderMessageText(message.text)}
-                          </p>
-                        )}
-
-                        {isOwnMessage && (
-                          <div className="flex items-center justify-end gap-1 mt-1">
-                            {getStatusIcon(message.status)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="absolute -bottom-4 right-0">
-                        {message.reactions && message.reactions.length > 0 && (
-                          <div className="flex gap-1 mt-1 flex-wrap">
-                            {message.reactions.map((reaction, idx) => (
-                              <span
-                                key={idx}
-                                className="text-sm bg-base-200 border border-base-300 px-1.5 py-0.5 rounded-full"
-                                title={reaction.userId.fullName}
+                        {/* Quick reactions - FIXED: Using useCallback */}
+                        {hoveredMessage === message._id && (
+                          <div
+                            className={`absolute ${
+                              isOwnMessage ? "right-0" : "left-0"
+                            } top-0 -translate-y-8 bg-base-300 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10`}
+                          >
+                            {reactionEmojis.map((emoji) => (
+                              <button
+                                key={emoji}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReaction(message._id, emoji);
+                                }}
+                                onMouseEnter={() =>
+                                  setHoveredMessage(message._id)
+                                }
+                                className="hover:scale-125 transition-transform cursor-pointer"
                               >
-                                {reaction.emoji}
-                              </span>
+                                {emoji}
+                              </button>
                             ))}
                           </div>
                         )}
                       </div>
-
-                      {/* Quick reactions - FIXED: Using useCallback */}
-                      {hoveredMessage === message._id && (
-                        <div
-                          className={`absolute ${
-                            isOwnMessage ? "right-0" : "left-0"
-                          } top-0 -translate-y-8 bg-base-300 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10`}
-                        >
-                          {reactionEmojis.map((emoji) => (
-                            <button
-                              key={emoji}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleReaction(message._id, emoji);
-                              }}
-                              onMouseEnter={() =>
-                                setHoveredMessage(message._id)
-                              }
-                              className="hover:scale-125 transition-transform cursor-pointer"
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 );

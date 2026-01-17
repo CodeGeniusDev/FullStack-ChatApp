@@ -30,9 +30,7 @@ const Sidebar = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isResizing, setIsResizing] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    // Get width from localStorage or use default
     if (typeof window !== "undefined") {
       const savedWidth = localStorage.getItem(SIDEBAR.STORAGE_KEY);
       return savedWidth
@@ -42,30 +40,6 @@ const Sidebar = () => {
     return SIDEBAR.DEFAULT_WIDTH;
   });
 
-  // Close mobile menu when a user is selected
-  useEffect(() => {
-    if (selectedUser && window.innerWidth < 1024) {
-      setIsMobileOpen(false);
-    }
-  }, [selectedUser]);
-
-  // Close sidebar when clicking outside on mobile
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (
-        isMobileOpen &&
-        sidebarRef.current &&
-        !sidebarRef.current.contains(e.target) &&
-        !e.target.closest(".mobile-menu-button")
-      ) {
-        setIsMobileOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isMobileOpen]);
-  
   const dropdownRef = useRef(null);
   const sidebarRef = useRef(null);
 
@@ -87,8 +61,9 @@ const Sidebar = () => {
   const resize = useCallback(
     (e) => {
       if (isResizing && sidebarRef.current) {
-        const newWidth =
-          e.clientX - sidebarRef.current.getBoundingClientRect().left;
+        const rect = sidebarRef.current.getBoundingClientRect();
+        const newWidth = e.clientX - rect.left;
+
         if (newWidth >= SIDEBAR.MIN_WIDTH && newWidth <= SIDEBAR.MAX_WIDTH) {
           setSidebarWidth(newWidth);
         }
@@ -97,14 +72,27 @@ const Sidebar = () => {
     [isResizing]
   );
 
+  // Handle mouse move and up events during resize
   useEffect(() => {
-    window.addEventListener("mousemove", resize);
-    window.addEventListener("mouseup", stopResizing);
-    return () => {
-      window.removeEventListener("mousemove", resize);
-      window.removeEventListener("mouseup", stopResizing);
-    };
-  }, [resize, stopResizing]);
+    if (isResizing) {
+      const handleMouseMove = (e) => {
+        e.preventDefault();
+        resize(e);
+      };
+
+      const handleMouseUp = () => {
+        setIsResizing(false);
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+
+      return () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+    }
+  }, [isResizing, resize]);
 
   useEffect(() => {
     getUsers();
@@ -148,7 +136,7 @@ const Sidebar = () => {
 
   if (isUsersLoading) {
     return (
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <SidebarSkeleton />
       </div>
     );
@@ -156,28 +144,17 @@ const Sidebar = () => {
 
   return (
     <>
-      {/* Mobile Overlay */}
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={() => setIsMobileOpen(false)}
-        />
-      )}
-
       <aside
         ref={sidebarRef}
-        className={`fixed lg:sticky top-0 left-0 h-screen lg:h-full border-r border-base-300 flex flex-col transition-all duration-300 bg-base-100 z-40 
-          ${
-            isMobileOpen
-              ? "translate-x-0"
-              : "-translate-x-full lg:translate-x-0"
-          }
-           w-[85vw] sm:w-[320px] lg:w-[${sidebarWidth}px] min-w-[280px] max-w-[500px]`}
+        className="w-full lg:w-auto lg:min-w-[280px] lg:max-w-[500px] border-r border-base-300 flex flex-col bg-base-100 h-full relative"
         style={{
-          "--sidebar-width": `${sidebarWidth}px`,
-          width: isMobileOpen ? "80vw" : "var(--sidebar-width)",
-          minWidth: "280px",
-          maxWidth: "500px",
+          width: `100%`,
+          maxWidth: "100%",
+          ...(window.innerWidth >= 1024 && {
+            // Only apply custom width on lg screens and up
+            width: `${sidebarWidth}px`,
+            maxWidth: "500px",
+          }),
         }}
       >
         {/* Header */}
@@ -365,13 +342,16 @@ const Sidebar = () => {
           )}
         </div>
 
-        {/* Resize handle */}
+        {/* Resize handle - Desktop only */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary/50 active:bg-primary/70 transition-colors duration-200 z-20 hidden lg:block"
-          onMouseDown={startResizing}
+          className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary/70 transition-colors duration-200 z-20 hidden lg:flex items-center justify-center"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            startResizing();
+          }}
           title="Drag to resize"
         >
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 bg-base-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="w-1 h-12 bg-base-300/50 rounded-full hover:bg-primary transition-colors duration-200" />
         </div>
       </aside>
 
@@ -382,15 +362,6 @@ const Sidebar = () => {
           style={{ cursor: "col-resize" }}
         />
       )}
-
-      {/* Mobile floating button */}
-      <button
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="fixed bottom-4 right-4 lg:hidden z-50 p-3 bg-primary text-primary-content rounded-full shadow-lg border-2 border-primary cursor-pointer mobile-menu-button"
-        aria-label="Toggle sidebar"
-      >
-        {isMobileOpen ? <X size={24} /> : <Users size={24} />}
-      </button>
     </>
   );
 };

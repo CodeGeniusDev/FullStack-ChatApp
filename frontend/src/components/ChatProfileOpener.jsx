@@ -85,7 +85,7 @@ const ChatProfileOpener = ({ onClose, user }) => {
       >
         <div
           onClick={handleModalClick}
-          className="backdrop-blur-lg bg-base-100/90 rounded-lg w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto"
+          className="backdrop-blur-lg bg-base-100/80 rounded-lg w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto"
         >
           <button
             onClick={onClose}

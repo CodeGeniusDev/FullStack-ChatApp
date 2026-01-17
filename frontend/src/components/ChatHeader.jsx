@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { X, User } from "lucide-react";
+import { ArrowLeft, MoreVertical, User } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import ChatProfileOpener from "./ChatProfileOpener";
@@ -10,7 +10,7 @@ const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-   const [imageModal, setImageModal] = useState(null);
+  const [imageModal, setImageModal] = useState(null);
 
   const handleProfileClick = (e) => {
     e.stopPropagation();
@@ -24,6 +24,14 @@ const ChatHeader = () => {
     <div className="p-2.5 border-b border-base-300 bg-base-200/50">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
+          {/* Back arrow */}
+          <button
+            className="btn btn-circle btn-sm"
+            onClick={() => setSelectedUser(null)}
+          >
+            <ArrowLeft size={16} />
+          </button>
+
           {/* Avatar */}
           <div className="dropdown dropdown-bottom">
             <div
@@ -39,7 +47,7 @@ const ChatHeader = () => {
                 />
               </div>
             </div>
-            <div className="dropdown-content z-1 menu p-2 shadow backdrop-blur-lg bg-base-100/90 border border-base-300 rounded-box w-52 mt-2">
+            <div className="dropdown-content z-1 menu p-2 shadow backdrop-blur-lg bg-base-100/80 border border-base-300 rounded-box w-52 mt-2">
               <div className="px-4 py-2">
                 <h3 className="font-medium">{selectedUser.fullName}</h3>
                 <p className="text-sm text-base-content/70 flex items-center gap-1">
@@ -94,13 +102,41 @@ const ChatHeader = () => {
           </div>
         </div>
 
-        {/* Close button */}
-        <button
-          className="btn btn-circle btn-sm"
-          onClick={() => setSelectedUser(null)}
-        >
-          <X size={16} />
-        </button>
+        {/* More options dropdown */}
+        <div className="dropdown dropdown-end">
+          <label tabIndex={0} className="btn btn-circle btn-sm">
+            <MoreVertical size={16} />
+          </label>
+          <ul
+            tabIndex={0}
+            className="dropdown-content z-1 menu p-2 shadow backdrop-blur-lg bg-base-100/80 border border-base-300 rounded-box w-52 mt-2"
+          >
+            <li>
+              <a>View contact</a>
+            </li>
+            <li>
+              <a>Search</a>
+            </li>
+            <li>
+              <a>Media, links, and docs</a>
+            </li>
+            {/* line */}
+            <div className="divider my-0"></div>
+            <li>
+              <details>
+                <summary>View more</summary>
+                <ul>
+                  <li>
+                    <a>Clear chat</a>
+                  </li>
+                  <li>
+                    <a>Export chat</a>
+                  </li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </div>
       </div>
       {isProfileOpen && (
         <ChatProfileOpener
