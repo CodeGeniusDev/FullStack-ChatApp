@@ -33,47 +33,14 @@ export const truncateText = (text, maxLength = 30) => {
   return text.substring(0, maxLength) + "...";
 };
 
-export const requestNotificationPermission = async () => {
-  if (!("Notification" in window)) {
-    console.log("This browser does not support notifications");
-    return false;
-  }
-
-  if (Notification.permission === "granted") {
-    return true;
-  }
-
-  if (Notification.permission !== "denied") {
-    const permission = await Notification.requestPermission();
-    return permission === "granted";
-  }
-
-  return false;
-};
-
-export const showNotification = (title, options = {}) => {
-  if (Notification.permission === "granted") {
-    const notification = new Notification(title, {
-      icon: options.icon || "/logo.png",
-      body: options.body || "",
-      tag: options.tag || "chat-notification",
-      requireInteraction: false,
-      ...options,
-    });
-
-    notification.onclick = () => {
-      window.focus();
-      notification.close();
-      if (options.onClick) {
-        options.onClick();
-      }
-    };
-
-    setTimeout(() => notification.close(), 5000);
-
-    return notification;
-  }
-};
+export { 
+  requestNotificationPermission, 
+  showNotification,
+  playNotificationSound,
+  areNotificationsSupported,
+  isAppInstalled,
+  isMobileDevice,
+} from './notifications.js';
 
 // Image compression utility
 export const compressImage = (

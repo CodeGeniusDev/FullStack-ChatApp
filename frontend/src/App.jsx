@@ -1,4 +1,5 @@
 import Navbar from "./components/Navbar";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
 import Home from "./pages/Home";
 import SignUp from "./pages/Signup";
@@ -67,6 +68,9 @@ const App = () => {
       </Routes>
 
       <Toaster />
+      
+      {/* PWA Install Prompt */}
+      {authUser && <PWAInstallPrompt />}
     </div>
   );
 };

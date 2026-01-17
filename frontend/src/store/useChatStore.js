@@ -2,7 +2,11 @@ import { create } from "zustand";
 import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "./useAuthStore";
-import { showNotification, requestNotificationPermission } from "../lib/utils";
+import { 
+  showNotification, 
+  requestNotificationPermission,
+  playNotificationSound,
+} from "../lib/notifications";
 
 export const useChatStore = create((set, get) => ({
   messages: [],
@@ -93,7 +97,7 @@ export const useChatStore = create((set, get) => ({
     }
 
     const authUser = useAuthStore.getState().authUser;
-
+    
     // Create optimistic message for instant UI update
     const optimisticMessage = {
       _id: `temp-${Date.now()}`,
@@ -118,7 +122,7 @@ export const useChatStore = create((set, get) => ({
 
     // Instantly add to UI and update sidebar
     set({ messages: [...messages, optimisticMessage], replyingTo: null });
-
+    
     // Immediately update sidebar with optimistic message
     get().updateUserLastMessage(selectedUser._id, {
       text: optimisticMessage.text,
@@ -135,14 +139,14 @@ export const useChatStore = create((set, get) => ({
           replyTo: replyingTo?._id || null,
         }
       );
-
+      
       // Replace optimistic message with real one
       set({
         messages: get().messages.map((msg) =>
           msg._id === optimisticMessage._id ? res.data : msg
         ),
       });
-
+      
       // Update sidebar with real message data
       get().updateUserLastMessage(selectedUser._id, {
         text: res.data.text,
@@ -152,14 +156,14 @@ export const useChatStore = create((set, get) => ({
       });
     } catch (error) {
       console.error("Error sending message:", error);
-
+      
       // Remove optimistic message on error
       set({
         messages: get().messages.filter(
           (msg) => msg._id !== optimisticMessage._id
         ),
       });
-
+      
       // Revert sidebar update on error
       const previousMessage = messages[messages.length - 1];
       if (previousMessage) {
@@ -170,7 +174,7 @@ export const useChatStore = create((set, get) => ({
           senderId: previousMessage.senderId._id || previousMessage.senderId,
         });
       }
-
+      
       toast.error(error.response?.data?.message || "Failed to send message");
     }
   },
@@ -178,7 +182,7 @@ export const useChatStore = create((set, get) => ({
   markMessagesAsRead: async (userId) => {
     try {
       await axiosInstance.put(`/messages/read/${userId}`);
-
+      
       const { unreadCounts } = get();
       const newCounts = { ...unreadCounts };
       delete newCounts[userId];
@@ -203,7 +207,7 @@ export const useChatStore = create((set, get) => ({
           ? "Message deleted for everyone"
           : "Message deleted for you"
       );
-
+      
       // Refresh user list only for deletions
       get().getUsers();
     } catch (error) {
@@ -225,7 +229,7 @@ export const useChatStore = create((set, get) => ({
       });
 
       toast.success("Message edited");
-
+      
       // Update sidebar last message if it's the edited one
       const { selectedUser } = get();
       if (selectedUser) {
@@ -253,9 +257,7 @@ export const useChatStore = create((set, get) => ({
 
       set({
         messages: get().messages.map((msg) =>
-          msg._id === messageId
-            ? { ...msg, reactions: res.data.reactions }
-            : msg
+          msg._id === messageId ? { ...msg, reactions: res.data.reactions } : msg
         ),
       });
     } catch (error) {
@@ -284,7 +286,7 @@ export const useChatStore = create((set, get) => ({
   setTyping: (isTyping) => {
     const { selectedUser } = get();
     const socket = useAuthStore.getState().socket;
-
+    
     if (socket && selectedUser) {
       socket.emit("typing", {
         receiverId: selectedUser._id,
@@ -305,7 +307,7 @@ export const useChatStore = create((set, get) => ({
       const { selectedUser: currentSelectedUser, notificationsEnabled } = get();
       const isMessageFromSelectedUser =
         newMessage.senderId._id === currentSelectedUser?._id;
-
+      
       // ALWAYS update sidebar for any new message
       get().updateUserLastMessage(newMessage.senderId._id, {
         text: newMessage.text,
@@ -313,7 +315,7 @@ export const useChatStore = create((set, get) => ({
         createdAt: newMessage.createdAt,
         senderId: newMessage.senderId._id,
       });
-
+      
       if (!isMessageFromSelectedUser) {
         // Update unread count
         const { unreadCounts } = get();
@@ -324,16 +326,21 @@ export const useChatStore = create((set, get) => ({
               (unreadCounts[newMessage.senderId._id] || 0) + 1,
           },
         });
-
-        // Show browser notification
+        
+        // Show browser/PWA notification
         if (notificationsEnabled && document.hidden) {
           showNotification(newMessage.senderId.fullName || "New Message", {
-            body: newMessage.text || "Sent you a photo",
-            icon: newMessage.senderId.profilePic || "/avatar.png",
+            body: newMessage.text || "📷 Sent you a photo",
+            icon: newMessage.senderId.profilePic || "/icons/icon-192x192.png",
+            badge: "/icons/icon-96x96.png",
             tag: `message-${newMessage._id}`,
+            url: "/",
           });
+          
+          // Play notification sound
+          playNotificationSound();
         }
-
+        
         // Show toast notification
         toast.success(
           `New message from ${newMessage.senderId.fullName || "User"}`,
@@ -341,7 +348,7 @@ export const useChatStore = create((set, get) => ({
             duration: 3000,
           }
         );
-
+        
         return;
       }
 
@@ -369,7 +376,9 @@ export const useChatStore = create((set, get) => ({
     socket.on("messagesRead", ({ userId }) => {
       set({
         messages: get().messages.map((msg) =>
-          msg.receiverId._id === userId ? { ...msg, status: "read" } : msg
+          msg.receiverId._id === userId
+            ? { ...msg, status: "read" }
+            : msg
         ),
       });
     });
