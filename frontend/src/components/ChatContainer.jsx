@@ -2,15 +2,22 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
-import MessageSkeleton from "./skeletons/MessageSkeleton";
 import ChatHeader from "./ChatHeader";
 import MessagesInput from "./MessagesInput";
 import { formatMessageTime } from "../lib/utils";
-import { Check, CheckCheck, Reply, Trash2, Edit, Copy } from "lucide-react";
+import { Check, CheckCheck, Reply, Trash2, Edit, Copy, X } from "lucide-react";
+import {
+  Star,
+  Share2,
+  Download,
+  MoreVertical,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+} from "lucide-react";
 import ChatProfileOpener from "./ChatProfileOpener";
-import ImageModel from "./ImageModel";
 
-const ChatContainer = ({ onClose, user, message }) => {
+const ChatContainer = () => {
   const {
     messages,
     getMessages,
@@ -38,10 +45,13 @@ const ChatContainer = ({ onClose, user, message }) => {
   const previousMessagesLength = useRef(0);
   const isInitialLoad = useRef(true);
 
-  // Check if the selected user is typing (not yourself!)
+  // Mobile long-press state
+  const [longPressMessage, setLongPressMessage] = useState(null);
+  const longPressTimerRef = useRef(null);
+  const touchStartPos = useRef(null);
+
   const isOtherUserTyping = typingUsers[selectedUser?._id] || false;
 
-  // Check if user is near bottom of chat
   const checkIfNearBottom = useCallback(() => {
     if (!messagesContainerRef.current) return true;
 
@@ -49,18 +59,15 @@ const ChatContainer = ({ onClose, user, message }) => {
       messagesContainerRef.current;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-    // Consider "near bottom" if within 100px of the bottom
     return distanceFromBottom < 100;
   }, []);
 
-  // Scroll to bottom function
   const scrollToBottom = useCallback((behavior = "smooth") => {
     if (messageEndRef.current) {
       messageEndRef.current.scrollIntoView({ behavior, block: "end" });
     }
   }, []);
 
-  // Load messages when user changes
   useEffect(() => {
     if (selectedUser?._id) {
       isInitialLoad.current = true;
@@ -76,15 +83,12 @@ const ChatContainer = ({ onClose, user, message }) => {
     unsubscribeFromMessages,
   ]);
 
-  // Handle scrolling ONLY when appropriate
   useEffect(() => {
-    // Don't scroll if loading
     if (isMessagesLoading) return;
 
     const messagesLength = messages.length;
     const hasNewMessages = messagesLength > previousMessagesLength.current;
 
-    // Initial load - scroll instantly to bottom
     if (isInitialLoad.current && messagesLength > 0) {
       setTimeout(() => {
         scrollToBottom("auto");
@@ -94,11 +98,9 @@ const ChatContainer = ({ onClose, user, message }) => {
       return;
     }
 
-    // New message arrived
     if (hasNewMessages) {
       const wasNearBottom = checkIfNearBottom();
 
-      // Only auto-scroll if user was already near the bottom
       if (wasNearBottom || shouldAutoScroll) {
         setTimeout(() => scrollToBottom("smooth"), 50);
       }
@@ -113,7 +115,6 @@ const ChatContainer = ({ onClose, user, message }) => {
     shouldAutoScroll,
   ]);
 
-  // Track scroll position to determine auto-scroll behavior
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -126,6 +127,45 @@ const ChatContainer = ({ onClose, user, message }) => {
     container.addEventListener("scroll", handleScroll);
     return () => container.removeEventListener("scroll", handleScroll);
   }, [checkIfNearBottom]);
+
+  // Mobile long-press handlers
+  const handleTouchStart = useCallback((e, message) => {
+    touchStartPos.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+
+    longPressTimerRef.current = setTimeout(() => {
+      // Vibrate on long press
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      setLongPressMessage(message._id);
+    }, 500);
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!touchStartPos.current) return;
+
+    const moveX = Math.abs(e.touches[0].clientX - touchStartPos.current.x);
+    const moveY = Math.abs(e.touches[0].clientY - touchStartPos.current.y);
+
+    // Cancel if moved more than 10px
+    if (moveX > 10 || moveY > 10) {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchStartPos.current = null;
+  }, []);
 
   const handleContextMenu = (e, message) => {
     e.preventDefault();
@@ -151,25 +191,25 @@ const ChatContainer = ({ onClose, user, message }) => {
     setContextMenu(null);
   };
 
-  // FIXED: Prevent auto-scroll on reaction
   const handleReaction = useCallback(
     async (messageId, emoji) => {
-      // Store current scroll position
       const container = messagesContainerRef.current;
       const scrollTop = container?.scrollTop || 0;
 
       await addReaction(messageId, emoji);
 
-      // Restore scroll position after reaction
       if (container) {
         container.scrollTop = scrollTop;
       }
+
+      // Close mobile reaction menu
+      setLongPressMessage(null);
     },
     [addReaction]
   );
 
-  const handleImageClick = (message) => {
-    setImageModal(message);
+  const handleImageClick = (imageUrl) => {
+    setImageModal(imageUrl);
     setImageZoom(1);
     setImageRotation(0);
   };
@@ -244,18 +284,16 @@ const ChatContainer = ({ onClose, user, message }) => {
     });
   };
 
-  const closeImageModal = (e) => {
-    e?.stopPropagation();
-    setImageModal(null);
-  };
-
   const reactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
-  if (isMessagesLoading) {
+  // Don't show skeleton, just return empty or messages immediately
+  if (isMessagesLoading && messages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col overflow-auto">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <ChatHeader />
-        <MessageSkeleton />
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-zinc-500 text-sm">Loading messages...</p>
+        </div>
         <MessagesInput />
       </div>
     );
@@ -266,7 +304,6 @@ const ChatContainer = ({ onClose, user, message }) => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <ChatHeader />
 
-        {/* Messages - FIXED: Added ref to track scroll */}
         <div
           ref={messagesContainerRef}
           className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
@@ -297,6 +334,9 @@ const ChatContainer = ({ onClose, user, message }) => {
                     onMouseEnter={() => setHoveredMessage(message._id)}
                     onMouseLeave={() => setHoveredMessage(null)}
                     onContextMenu={(e) => handleContextMenu(e, message)}
+                    onTouchStart={(e) => handleTouchStart(e, message)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
                   >
                     {!isOwnMessage && (
                       <div className="chat-image avatar">
@@ -314,95 +354,128 @@ const ChatContainer = ({ onClose, user, message }) => {
                       </div>
                     )}
 
-                    <div className="">
-                      <div className="relative group">
-                        <div className="chat-bubble bg-base-200 flex flex-col max-w-xs lg:max-w-md">
-                          {message.replyTo && (
-                            <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
-                              <p className="font-semibold text-xs">
-                                {message.replyTo.senderId.fullName}
-                              </p>
-                              <p className="truncate opacity-70">
-                                {message.replyTo.text || "Image"}
-                              </p>
-                            </div>
-                          )}
+                    <div className="chat-header mb-1 flex items-center gap-2">
+                      <time className="text-xs opacity-50">
+                        {formatMessageTime(message.createdAt)}
+                      </time>
+                      {message.isEdited && (
+                        <span className="text-xs opacity-50">(edited)</span>
+                      )}
+                    </div>
 
-                          {message.image && (
-                            <img
-                              src={message.image}
-                              alt="Attachment"
-                              className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
-                              onClick={() => handleImageClick(message)}
-                            />
-                          )}
-
-                          {message.text && (
-                            <p className="wrap-break whitespace-pre-wrap">
-                              {renderMessageText(message.text)}
+                    <div className="relative group">
+                      <div className="chat-bubble flex flex-col max-w-xs lg:max-w-md">
+                        {message.replyTo && (
+                          <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
+                            <p className="font-semibold text-xs">
+                              {message.replyTo.senderId.fullName}
                             </p>
-                          )}
-
-                          <div className="flex items-center justify-between gap-2 w-full pt-1">
-                            <div className="flex-1 flex items-center">
-                              {message.isEdited && (
-                                <span className="text-xs opacity-50">
-                                  (edited)
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <time className="text-xs opacity-50">
-                                {formatMessageTime(message.createdAt)}
-                              </time>
-                              {isOwnMessage && getStatusIcon(message.status)}
-                            </div>
+                            <p className="truncate opacity-70">
+                              {message.replyTo.text || "Image"}
+                            </p>
                           </div>
-                        </div>
+                        )}
 
-                        <div className="absolute -bottom-4 right-0">
-                          {message.reactions &&
-                            message.reactions.length > 0 && (
-                              <div className="flex gap-1 mt-1 flex-wrap">
-                                {message.reactions.map((reaction, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-sm bg-base-200 border border-base-300 px-1.5 py-0.5 rounded-full"
-                                    title={reaction.userId.fullName}
-                                  >
-                                    {reaction.emoji}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                        </div>
+                        {message.image && (
+                          <img
+                            src={message.image}
+                            alt="Attachment"
+                            className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => handleImageClick(message.image)}
+                          />
+                        )}
 
-                        {/* Quick reactions - FIXED: Using useCallback */}
-                        {hoveredMessage === message._id && (
-                          <div
-                            className={`absolute ${
-                              isOwnMessage ? "right-0" : "left-0"
-                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-100`}
-                          >
-                            {reactionEmojis.map((emoji) => (
-                              <button
-                                key={emoji}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleReaction(message._id, emoji);
-                                }}
-                                onMouseEnter={() =>
-                                  setHoveredMessage(message._id)
-                                }
-                                className="hover:scale-125 transition-transform cursor-pointer"
+                        {message.text && (
+                          <p className="wrap-break whitespace-pre-wrap">
+                            {renderMessageText(message.text)}
+                          </p>
+                        )}
+
+                        {isOwnMessage && (
+                          <div className="flex items-center justify-end gap-1 mt-1">
+                            {getStatusIcon(message.status)}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="absolute -bottom-4 right-0">
+                        {message.reactions && message.reactions.length > 0 && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {message.reactions.map((reaction, idx) => (
+                              <span
+                                key={idx}
+                                className="text-sm bg-base-200 border border-base-300 px-1.5 py-0.5 rounded-full"
+                                title={reaction.userId.fullName}
                               >
-                                {emoji}
-                              </button>
+                                {reaction.emoji}
+                              </span>
                             ))}
                           </div>
                         )}
                       </div>
+
+                      {/* Desktop hover reactions */}
+                      {hoveredMessage === message._id && (
+                        <div
+                          className={`absolute ${
+                            isOwnMessage ? "right-0" : "left-0"
+                          } top-0 -translate-y-8 bg-base-300 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 hidden md:flex`}
+                        >
+                          {reactionEmojis.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReaction(message._id, emoji);
+                              }}
+                              onMouseEnter={() =>
+                                setHoveredMessage(message._id)
+                              }
+                              className="hover:scale-125 transition-transform cursor-pointer text-lg"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Mobile long-press reactions */}
+                      {longPressMessage === message._id && (
+                        <div
+                          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center md:hidden"
+                          onClick={() => setLongPressMessage(null)}
+                        >
+                          <div
+                            className="bg-base-200 rounded-2xl p-6 m-4 max-w-sm"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex justify-between items-center mb-4">
+                              <h3 className="font-semibold">
+                                React to message
+                              </h3>
+                              <button
+                                onClick={() => setLongPressMessage(null)}
+                                className="btn btn-ghost btn-sm btn-circle"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-6 gap-3">
+                              {reactionEmojis.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() =>
+                                    handleReaction(message._id, emoji)
+                                  }
+                                  className="text-3xl hover:scale-125 transition-transform p-2"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -515,11 +588,110 @@ const ChatContainer = ({ onClose, user, message }) => {
 
       {/* Image Modal */}
       {imageModal && (
-        <ImageModel
-          onClose={closeImageModal}
-          user={selectedUser}
-          message={imageModal}
-        />
+        <div className="fixed inset-0 z-50 bg-black/90">
+          <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-4 text-white backdrop-blur-lg bg-black/20">
+            <div className="flex items-center gap-3">
+              <button
+                className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none"
+                onClick={() => setImageModal(null)}
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-medium">Image</span>
+                <span className="text-xs text-gray-300">Preview</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none"
+                title="Star"
+              >
+                <Star className="w-5 h-5" />
+              </button>
+
+              <button
+                className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none"
+                onClick={handleShare}
+                title="Share"
+              >
+                <Share2 className="w-5 h-5" />
+              </button>
+
+              <button
+                className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none"
+                onClick={handleDownload}
+                title="Download"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+
+              <button
+                className="btn btn-circle btn-ghost text-white bg-black/50 hover:bg-gray-800 outline-none border-0 hover:shadow-none"
+                title="More options"
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center h-full pt-16 pb-20 px-4">
+            <img
+              src={imageModal}
+              alt="Full size"
+              className="max-w-full max-h-full object-contain rounded-lg transition-transform duration-200"
+              style={{
+                transform: `scale(${imageZoom}) rotate(${imageRotation}deg)`,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+
+          <div className="absolute bottom-0 left-0 right-0 h-16 flex items-center justify-center gap-4 bg-gradient-to-t from-black/80 to-transparent">
+            <button
+              className="p-3 hover:bg-white/10 rounded-full transition-colors text-white"
+              onClick={() => setImageZoom(Math.max(0.5, imageZoom - 0.25))}
+              title="Zoom out"
+            >
+              <ZoomOut className="w-5 h-5" />
+            </button>
+
+            <span className="text-white text-sm min-w-[60px] text-center">
+              {Math.round(imageZoom * 100)}%
+            </span>
+
+            <button
+              className="p-3 hover:bg-white/10 rounded-full transition-colors text-white"
+              onClick={() => setImageZoom(Math.min(3, imageZoom + 0.25))}
+              title="Zoom in"
+            >
+              <ZoomIn className="w-5 h-5" />
+            </button>
+
+            <div className="w-px h-8 bg-white/20 mx-2" />
+
+            <button
+              className="p-3 hover:bg-white/10 rounded-full transition-colors text-white"
+              onClick={() => setImageRotation((imageRotation + 90) % 360)}
+              title="Rotate"
+            >
+              <RotateCw className="w-5 h-5" />
+            </button>
+
+            <button
+              className="px-4 py-2 hover:bg-white/10 rounded-lg transition-colors text-white text-sm"
+              onClick={() => {
+                setImageZoom(1);
+                setImageRotation(0);
+              }}
+              title="Reset"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
       )}
 
       {isProfileOpen && selectedUser && (
