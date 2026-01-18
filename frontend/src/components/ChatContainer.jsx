@@ -316,7 +316,7 @@ const ChatContainer = ({ onClose, user, message }) => {
 
                     <div className="">
                       <div className="relative group">
-                        <div className="chat-bubble bg-base-200 flex flex-col max-w-xs lg:max-w-md">
+                        <div className="chat-bubble bg-base-200 flex flex-col max-w-lg">
                           {message.replyTo && (
                             <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
                               <p className="font-semibold text-xs">

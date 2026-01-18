@@ -123,7 +123,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   };
 
   return (
-    <div className="p-3 w-full border-t border-base-300 backdrop-blur-md bg-base-100/80">
+    <div className="p-3 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/10">
       {/* Reply preview */}
       {replyingTo && (
         <div className="mb-2 flex items-center gap-2 backdrop-blur-md bg-base-200/70 p-2.5 rounded-lg border border-base-300/50">

@@ -5,6 +5,8 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import ChatProfileOpener from "./ChatProfileOpener";
 import { formatLastSeen } from "../lib/utils";
+import { axiosInstance } from "../lib/axios";
+import toast from "react-hot-toast";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
@@ -18,6 +20,82 @@ const ChatHeader = () => {
     setIsProfileOpen(true);
     // Close the dropdown
     document.activeElement?.blur();
+  };
+
+  const handleClearChat = async () => {
+    if (!selectedUser?._id) return;
+
+    if (
+      !window.confirm(
+        "Are you sure you want to clear this chat? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const response = await axiosInstance.delete(
+        `/messages/clear/${selectedUser._id}`
+      );
+
+      if (response.data.success) {
+        // Clear messages in the store
+        useChatStore.getState().messages = [];
+        // Refresh the chat
+        useChatStore.getState().getMessages(selectedUser._id);
+        toast.success("Chat cleared successfully");
+      }
+    } catch (error) {
+      console.error("Error clearing chat:", error);
+      toast.error(error.response?.data?.message || "Failed to clear chat");
+    } finally {
+      // Close the dropdown
+      document.activeElement?.blur();
+    }
+  };
+
+  const handleExportChat = async () => {
+    if (!selectedUser?._id) return;
+
+    try {
+      const { messages } = useChatStore.getState();
+
+      if (!messages.length) {
+        toast.info("No messages to export");
+        return;
+      }
+
+      // Format messages for export
+      const formattedMessages = messages
+        .map((msg) => {
+          const sender =
+            msg.senderId._id === selectedUser._id
+              ? selectedUser.fullName
+              : "You";
+          const time = new Date(msg.createdAt).toLocaleString();
+          return `[${time}] ${sender}: ${msg.text || (msg.image ? "[Image]" : "")}`;
+        })
+        .join("\n\n");
+
+      // Create a blob and download link
+      const blob = new Blob([formattedMessages], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `chat_with_${selectedUser.fullName.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("Chat exported successfully");
+    } catch (error) {
+      console.error("Error exporting chat:", error);
+      toast.error("Failed to export chat");
+    } finally {
+      // Close the dropdown
+      document.activeElement?.blur();
+    }
   };
 
   return (
@@ -67,7 +145,7 @@ const ChatHeader = () => {
               <ul>
                 <li className="w-full">
                   <button
-                    className="flex items-center gap-2 w-full text-left p-2 rounded-md hover:bg-base-200/50"
+                    className="flex items-center gap-2 w-full text-left p-2 rounded-md"
                     onClick={handleProfileClick}
                   >
                     <User size={16} />
@@ -112,7 +190,7 @@ const ChatHeader = () => {
             className="dropdown-content z-1 menu p-2 shadow backdrop-blur-lg bg-base-100/80 border border-base-300 rounded-box w-52 mt-2"
           >
             <li>
-              <a>View contact</a>
+              <a onClick={handleProfileClick}>View contact</a>
             </li>
             <li>
               <a>Search</a>
@@ -127,10 +205,18 @@ const ChatHeader = () => {
                 <summary>View more</summary>
                 <ul>
                   <li>
-                    <a>Clear chat</a>
+                    <a onClick={handleClearChat}>
+                      <div className="flex items-center gap-2">
+                        <span>Clear chat</span>
+                      </div>
+                    </a>
                   </li>
                   <li>
-                    <a>Export chat</a>
+                    <a onClick={handleExportChat}>
+                      <div className="flex items-center gap-2">
+                        <span>Export chat</span>
+                      </div>
+                    </a>
                   </li>
                 </ul>
               </details>

@@ -261,7 +261,7 @@ const Sidebar = () => {
                   onClick={() => setSelectedUser(user)}
                   className={`
                   w-full p-3 flex items-center gap-3
-                  hover:bg-base-200 ring-1 border-l-4 border-base-100 ring-base-200 transition-colors cursor-pointer
+                  hover:bg-base-200 ring-1 border-l-4 border-primary ring-base-200 transition-colors cursor-pointer
                   ${
                     isSelected
                       ? "bg-base-200 border-l-4 border-l-primary"
@@ -321,10 +321,10 @@ const Sidebar = () => {
                           {lastMessage.text
                             ? truncateText(lastMessage.text, 30)
                             : lastMessage.image
-                            ? "📷 Photo"
-                            : lastMessage.emoji
-                            ? "😊 Emoji"
-                            : "Message"}
+                              ? "📷 Photo"
+                              : lastMessage.emoji
+                                ? "😊 Emoji"
+                                : "Message"}
                         </p>
                         {unreadCount > 0 && (
                           <span className="flex-shrink-0 bg-primary text-primary-content text-xs font-bold rounded-full px-1.5 py-0.5">

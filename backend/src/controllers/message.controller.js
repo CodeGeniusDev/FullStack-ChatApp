@@ -53,10 +53,17 @@ export const getMessages = async (req, res) => {
 
     const messages = await Message.find({
       $or: [
-        { senderId: senderId, receiverId: userToChatId },
-        { senderId: userToChatId, receiverId: senderId },
+        {
+          senderId: senderId,
+          receiverId: userToChatId,
+          deletedFor: { $ne: senderId },
+        },
+        {
+          senderId: userToChatId,
+          receiverId: senderId,
+          deletedFor: { $ne: senderId },
+        },
       ],
-      deletedFor: { $ne: senderId },
     })
       .sort({ createdAt: 1 })
       .populate("senderId", "fullName profilePic")
@@ -133,7 +140,7 @@ export const sendMessage = async (req, res) => {
     // Send to receiver immediately if online
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newMessage", newMessage);
-      
+
       // Update status to delivered if receiver is online
       newMessage.status = "delivered";
       await newMessage.save();
@@ -220,6 +227,41 @@ export const deleteMessage = async (req, res) => {
   } catch (error) {
     console.error("Error in deleteMessage:", error);
     res.status(500).json({ error: error.message });
+  }
+};
+
+// Clear chat for current user only
+export const clearChat = async (req, res) => {
+  try {
+    const { id: otherUserId } = req.params;
+    const userId = req.user._id;
+
+    // Mark messages as deleted for the current user only
+    await Message.updateMany(
+      {
+        $or: [
+          {
+            senderId: userId,
+            receiverId: otherUserId,
+            deletedFor: { $ne: userId },
+          },
+          {
+            senderId: otherUserId,
+            receiverId: userId,
+            deletedFor: { $ne: userId },
+          },
+        ],
+      },
+      { $addToSet: { deletedFor: userId } }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Chat cleared for you",
+    });
+  } catch (error) {
+    console.error("Error in clearChat:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
