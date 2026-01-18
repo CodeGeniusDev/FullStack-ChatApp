@@ -1,80 +1,79 @@
 #!/bin/bash
 
-# WhatsApp-like Chat App - Quick Setup Script
-# This script will install all dependencies and help you get started
+# Chat App - Quick Setup Script
+# This script installs all dependencies and prepares the app for running
 
-echo "🚀 Welcome to Chat App Setup!"
-echo "================================"
+echo "🚀 Chat App - Quick Setup"
+echo "=========================="
 echo ""
+
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
-    echo "❌ Node.js is not installed!"
-    echo "Please install Node.js from https://nodejs.org/"
+    echo -e "${RED}❌ Node.js is not installed. Please install Node.js first.${NC}"
     exit 1
 fi
 
-echo "✅ Node.js version: $(node -v)"
-echo "✅ npm version: $(npm -v)"
+echo -e "${GREEN}✅ Node.js found: $(node --version)${NC}"
 echo ""
 
 # Install backend dependencies
-echo "📦 Installing backend dependencies..."
+echo -e "${BLUE}📦 Installing backend dependencies...${NC}"
 cd backend
+
+if [ ! -f ".env" ]; then
+    echo -e "${RED}⚠️  .env file not found in backend directory${NC}"
+    echo "Please create a .env file with required environment variables"
+    echo "See OPTIMIZATION_GUIDE.md for details"
+fi
+
 npm install
-echo "✅ Backend dependencies installed!"
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Backend dependencies installed${NC}"
+else
+    echo -e "${RED}❌ Backend installation failed${NC}"
+    exit 1
+fi
+
+cd ..
 echo ""
 
 # Install frontend dependencies
-echo "📦 Installing frontend dependencies..."
-cd ../frontend
-npm install
-echo "✅ Frontend dependencies installed!"
-echo ""
+echo -e "${BLUE}📦 Installing frontend dependencies...${NC}"
+cd frontend
 
-# Check for .env file
-cd ../backend
-if [ ! -f .env ]; then
-    echo "⚠️  No .env file found in backend/"
-    echo "📝 Creating .env template..."
-    cat > .env << EOF
-MONGODB_URI=your_mongodb_connection_string_here
-PORT=5002
-JWT_SECRET=your_jwt_secret_key_here
-NODE_ENV=development
-CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-EOF
-    echo "✅ .env template created!"
-    echo "⚠️  Please edit backend/.env with your actual credentials"
-    echo ""
-else
-    echo "✅ .env file already exists"
-    echo ""
+if [ ! -f ".env" ]; then
+    echo -e "${RED}⚠️  .env file not found in frontend directory${NC}"
+    echo "Please create a .env file with required environment variables"
+    echo "See OPTIMIZATION_GUIDE.md for details"
 fi
 
-echo "🎉 Installation Complete!"
-echo "========================="
+npm install
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Frontend dependencies installed${NC}"
+else
+    echo -e "${RED}❌ Frontend installation failed${NC}"
+    exit 1
+fi
+
+cd ..
 echo ""
-echo "📋 Next Steps:"
-echo "1. Edit backend/.env with your credentials:"
-echo "   - MongoDB connection string"
-echo "   - JWT secret key"
-echo "   - Cloudinary credentials"
+
+# Setup complete
+echo -e "${GREEN}✅ Setup Complete!${NC}"
 echo ""
-echo "2. Start the backend:"
-echo "   cd backend && npm start"
+echo "📝 Next steps:"
+echo "1. Configure .env files in both backend and frontend directories"
+echo "2. Start the backend: cd backend && npm run dev"
+echo "3. Start the frontend: cd frontend && npm run dev"
 echo ""
-echo "3. In a new terminal, start the frontend:"
-echo "   cd frontend && npm run dev"
+echo "📖 For detailed instructions, see OPTIMIZATION_GUIDE.md"
 echo ""
-echo "4. Open http://localhost:5173 in your browser"
-echo ""
-echo "📚 Documentation:"
-echo "   - README.md           - Full documentation"
-echo "   - SETUP_GUIDE.md      - Testing guide"
-echo "   - WHATSAPP_FEATURES.md - Feature list"
-echo "   - COMPARISON.md       - Before/After comparison"
-echo ""
-echo "Happy chatting! 💬✨"
+echo -e "${BLUE}🎉 Happy coding!${NC}"

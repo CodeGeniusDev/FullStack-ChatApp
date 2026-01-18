@@ -1,102 +1,81 @@
 @echo off
-REM WhatsApp-like Chat App - Quick Setup Script (Windows)
-REM This script will install all dependencies and help you get started
+REM Chat App - Quick Setup Script for Windows
+REM This script installs all dependencies and prepares the app for running
 
-echo ==========================================
-echo    Welcome to Chat App Setup!
-echo ==========================================
+echo.
+echo ================================
+echo Chat App - Quick Setup
+echo ================================
 echo.
 
 REM Check if Node.js is installed
 where node >nul 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    echo ERROR: Node.js is not installed!
-    echo Please install Node.js from https://nodejs.org/
+if %errorlevel% neq 0 (
+    echo [ERROR] Node.js is not installed. Please install Node.js first.
     pause
     exit /b 1
 )
 
-echo [OK] Node.js version:
-node -v
-echo [OK] npm version:
-npm -v
+echo [OK] Node.js found
+node --version
 echo.
 
 REM Install backend dependencies
 echo Installing backend dependencies...
 cd backend
+
+if not exist ".env" (
+    echo [WARNING] .env file not found in backend directory
+    echo Please create a .env file with required environment variables
+    echo See OPTIMIZATION_GUIDE.md for details
+)
+
 call npm install
-if %ERRORLEVEL% NEQ 0 (
-    echo ERROR: Failed to install backend dependencies!
+
+if %errorlevel% neq 0 (
+    echo [ERROR] Backend installation failed
     pause
     exit /b 1
 )
-echo [OK] Backend dependencies installed!
+
+echo [OK] Backend dependencies installed
+cd ..
 echo.
 
 REM Install frontend dependencies
 echo Installing frontend dependencies...
-cd ..\frontend
+cd frontend
+
+if not exist ".env" (
+    echo [WARNING] .env file not found in frontend directory
+    echo Please create a .env file with required environment variables
+    echo See OPTIMIZATION_GUIDE.md for details
+)
+
 call npm install
-if %ERRORLEVEL% NEQ 0 (
-    echo ERROR: Failed to install frontend dependencies!
+
+if %errorlevel% neq 0 (
+    echo [ERROR] Frontend installation failed
     pause
     exit /b 1
 )
-echo [OK] Frontend dependencies installed!
-echo.
 
-REM Check for .env file
-cd ..\backend
-if not exist .env (
-    echo WARNING: No .env file found in backend\
-    echo Creating .env template...
-    (
-        echo MONGODB_URI=your_mongodb_connection_string_here
-        echo PORT=5002
-        echo JWT_SECRET=your_jwt_secret_key_here
-        echo NODE_ENV=development
-        echo CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-        echo CLOUDINARY_API_KEY=your_cloudinary_api_key
-        echo CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-    ) > .env
-    echo [OK] .env template created!
-    echo WARNING: Please edit backend\.env with your actual credentials
-    echo.
-) else (
-    echo [OK] .env file already exists
-    echo.
-)
-
+echo [OK] Frontend dependencies installed
 cd ..
+echo.
 
-echo ==========================================
-echo    Installation Complete!
-echo ==========================================
+REM Setup complete
+echo ================================
+echo Setup Complete!
+echo ================================
 echo.
-echo Next Steps:
+echo Next steps:
+echo 1. Configure .env files in both backend and frontend directories
+echo 2. Start the backend: cd backend ^&^& npm run dev
+echo 3. Start the frontend: cd frontend ^&^& npm run dev
 echo.
-echo 1. Edit backend\.env with your credentials:
-echo    - MongoDB connection string
-echo    - JWT secret key
-echo    - Cloudinary credentials
+echo For detailed instructions, see OPTIMIZATION_GUIDE.md
 echo.
-echo 2. Start the backend:
-echo    cd backend
-echo    npm start
-echo.
-echo 3. In a new terminal, start the frontend:
-echo    cd frontend
-echo    npm run dev
-echo.
-echo 4. Open http://localhost:5173 in your browser
-echo.
-echo Documentation:
-echo    - README.md           - Full documentation
-echo    - SETUP_GUIDE.md      - Testing guide
-echo    - WHATSAPP_FEATURES.md - Feature list
-echo    - COMPARISON.md       - Before/After comparison
-echo.
-echo Happy chatting!
+echo Happy coding!
 echo.
 pause

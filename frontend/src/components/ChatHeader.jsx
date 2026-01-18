@@ -80,7 +80,7 @@ const ChatHeader = () => {
 
           {/* User info - Clickable area */}
           <div
-            className="cursor-pointer hover:bg-base-200/50 py-1.5 rounded-lg transition-colors hover:opacity-75"
+            className="cursor-pointer py-1.5 rounded-lg transition-colors hover:opacity-75"
             onClick={handleProfileClick}
             tabIndex={0}
             role="button"

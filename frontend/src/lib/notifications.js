@@ -1,4 +1,27 @@
-// Enhanced notification manager with PWA support
+// Enhanced notification manager with PWA support and rich notifications
+
+// Format time for notifications (e.g., "2 min ago", "Just now")
+const formatNotificationTime = (timestamp) => {
+  const now = new Date();
+  const messageTime = new Date(timestamp);
+  const diffInSeconds = Math.floor((now - messageTime) / 1000);
+
+  if (diffInSeconds < 60) return "Just now";
+  if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes} min${minutes > 1 ? "s" : ""} ago`;
+  }
+  if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+  }
+  
+  // Format as time for same day, date for older
+  return messageTime.toLocaleTimeString([], { 
+    hour: "2-digit", 
+    minute: "2-digit" 
+  });
+};
 
 // Request notification permission
 export const requestNotificationPermission = async () => {
@@ -27,7 +50,7 @@ export const requestNotificationPermission = async () => {
   }
 };
 
-// Show notification with vibration and sound
+// Show notification with vibration, sound, and enhanced preview
 export const showNotification = (title, options = {}) => {
   if (Notification.permission !== "granted") {
     return null;
@@ -38,27 +61,46 @@ export const showNotification = (title, options = {}) => {
     navigator.vibrate([200, 100, 200]);
   }
 
+  // Format timestamp for notification
+  const timeText = options.timestamp 
+    ? formatNotificationTime(options.timestamp)
+    : formatNotificationTime(new Date());
+
+  // Truncate body for preview
+  const body = options.body || "";
+  const maxBodyLength = 100;
+  const truncatedBody = body.length > maxBodyLength 
+    ? body.substring(0, maxBodyLength) + "..." 
+    : body;
+
+  // Enhanced body with timestamp
+  const enhancedBody = `${truncatedBody}\n${timeText}`;
+
   const defaultOptions = {
     icon: options.icon || "/icons/icon-192x192.png",
     badge: "/icons/icon-96x96.png",
-    body: options.body || "",
+    body: enhancedBody,
     tag: options.tag || "chat-notification",
     requireInteraction: false,
     silent: false,
     vibrate: [200, 100, 200],
-    timestamp: Date.now(),
+    timestamp: options.timestamp || Date.now(),
     data: {
       url: options.url || "/",
+      messageId: options.messageId,
+      senderId: options.senderId,
       ...options.data,
     },
     actions: [
       {
         action: "open",
-        title: "Open Chat",
+        title: "Open",
+        icon: "/icons/icon-96x96.png",
       },
       {
         action: "close",
         title: "Dismiss",
+        icon: "/icons/icon-96x96.png",
       },
     ],
     ...options,
@@ -82,8 +124,8 @@ export const showNotification = (title, options = {}) => {
         }
       };
 
-      // Auto close after 5 seconds
-      setTimeout(() => notification.close(), 5000);
+      // Auto close after 8 seconds
+      setTimeout(() => notification.close(), 8000);
 
       return notification;
     }
@@ -96,11 +138,25 @@ export const showNotification = (title, options = {}) => {
 // Play notification sound
 export const playNotificationSound = () => {
   try {
-    const audio = new Audio("/sounds/notification.mp3");
-    audio.volume = 0.5;
-    audio.play().catch((error) => {
-      console.log("Could not play notification sound:", error);
-    });
+    // Use a simple beep sound or data URL for cross-platform compatibility
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.value = 800; // Frequency in Hz
+    oscillator.type = "sine";
+
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.01,
+      audioContext.currentTime + 0.5
+    );
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.5);
   } catch (error) {
     console.log("Notification sound not available:", error);
   }

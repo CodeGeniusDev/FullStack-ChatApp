@@ -73,8 +73,8 @@ const Navbar = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Install App Button */}
-            {showInstallButton && authUser && (
+            {/* Install App Button - Desktop */}
+            {showInstallButton && (
               <button
                 onClick={handleInstallClick}
                 className="btn btn-sm gap-2 btn-primary hidden sm:flex"
@@ -86,7 +86,7 @@ const Navbar = () => {
             )}
             
             {/* Mobile Install Button */}
-            {showInstallButton && authUser && (
+            {showInstallButton && (
               <button
                 onClick={handleInstallClick}
                 className="btn btn-sm btn-circle btn-primary sm:hidden"
