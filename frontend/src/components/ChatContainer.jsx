@@ -37,9 +37,24 @@ const ChatContainer = ({ onClose, user, message }) => {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const previousMessagesLength = useRef(0);
   const isInitialLoad = useRef(true);
+  const [longPressMessage, setLongPressMessage] = useState(null);
+  const longPressTimer = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Check if the selected user is typing (not yourself!)
   const isOtherUserTyping = typingUsers[selectedUser?._id] || false;
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth <= 768 || 'ontouchstart' in window);
+    };
+    
+    checkIfMobile();
+    window.addEventListener('resize', checkIfMobile);
+    
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
 
   // Check if user is near bottom of chat
   const checkIfNearBottom = useCallback(() => {
@@ -129,9 +144,36 @@ const ChatContainer = ({ onClose, user, message }) => {
 
   const handleContextMenu = (e, message) => {
     e.preventDefault();
+    
+    // Don't show context menu on mobile (use long press instead)
+    if (isMobile) return;
+    
+    const menuWidth = 160;
+    const menuHeight = 200; // Approximate height
+    const padding = 10;
+    
+    let x = e.clientX;
+    let y = e.clientY;
+    
+    // Adjust X position if menu would go off screen
+    if (x + menuWidth > window.innerWidth - padding) {
+      x = window.innerWidth - menuWidth - padding;
+    }
+    if (x < padding) {
+      x = padding;
+    }
+    
+    // Adjust Y position if menu would go off screen
+    if (y + menuHeight > window.innerHeight - padding) {
+      y = window.innerHeight - menuHeight - padding;
+    }
+    if (y < padding) {
+      y = padding;
+    }
+    
     setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
+      x,
+      y,
       message,
     });
   };
@@ -164,9 +206,50 @@ const ChatContainer = ({ onClose, user, message }) => {
       if (container) {
         container.scrollTop = scrollTop;
       }
+      
+      // Close long press menu on mobile after reaction
+      if (isMobile) {
+        setLongPressMessage(null);
+      }
     },
-    [addReaction]
+    [addReaction, isMobile]
   );
+
+  // Handle long press for mobile
+  const handleTouchStart = useCallback((e, message) => {
+    if (!isMobile) return;
+    
+    longPressTimer.current = setTimeout(() => {
+      setLongPressMessage(message);
+      // Trigger haptic feedback if available
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, 500); // 500ms long press
+  }, [isMobile]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  // Cleanup long press timer
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+      }
+    };
+  }, []);
 
   const handleImageClick = (message) => {
     setImageModal(message);
@@ -294,9 +377,12 @@ const ChatContainer = ({ onClose, user, message }) => {
                     className={`chat ${
                       isOwnMessage ? "chat-end" : "chat-start"
                     }`}
-                    onMouseEnter={() => setHoveredMessage(message._id)}
-                    onMouseLeave={() => setHoveredMessage(null)}
+                    onMouseEnter={() => !isMobile && setHoveredMessage(message._id)}
+                    onMouseLeave={() => !isMobile && setHoveredMessage(null)}
                     onContextMenu={(e) => handleContextMenu(e, message)}
+                    onTouchStart={(e) => handleTouchStart(e, message)}
+                    onTouchEnd={handleTouchEnd}
+                    onTouchMove={handleTouchMove}
                   >
                     {!isOwnMessage && (
                       <div className="chat-image avatar">
@@ -378,12 +464,14 @@ const ChatContainer = ({ onClose, user, message }) => {
                             )}
                         </div>
 
-                        {/* Quick reactions - FIXED: Using useCallback */}
-                        {hoveredMessage === message._id && (
+                        {/* Quick reactions - Desktop hover, Mobile long press */}
+                        {((hoveredMessage === message._id && !isMobile) || (longPressMessage?._id === message._id && isMobile)) && (
                           <div
                             className={`absolute ${
                               isOwnMessage ? "right-0" : "left-0"
-                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-100`}
+                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200 rounded-full px-2 py-1 flex gap-2 shadow-lg ${
+                              isMobile ? 'opacity-100 z-50' : 'opacity-0 group-hover:opacity-100 transition-opacity z-100'
+                            }`}
                           >
                             {reactionEmojis.map((emoji) => (
                               <button
@@ -392,10 +480,8 @@ const ChatContainer = ({ onClose, user, message }) => {
                                   e.stopPropagation();
                                   handleReaction(message._id, emoji);
                                 }}
-                                onMouseEnter={() =>
-                                  setHoveredMessage(message._id)
-                                }
-                                className="hover:scale-125 transition-transform cursor-pointer"
+                                onMouseEnter={() => !isMobile && setHoveredMessage(message._id)}
+                                className="hover:scale-125 transition-transform cursor-pointer text-lg"
                               >
                                 {emoji}
                               </button>
@@ -509,6 +595,89 @@ const ChatContainer = ({ onClose, user, message }) => {
                 </button>
               </>
             )}
+          </div>
+        </>
+      )}
+
+      {/* Mobile Long Press Menu */}
+      {longPressMessage && isMobile && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/50"
+            onClick={() => setLongPressMessage(null)}
+          />
+          <div className="fixed z-50 bottom-0 left-0 right-0 bg-base-200 rounded-t-2xl shadow-xl pb-safe">
+            <div className="p-4 space-y-2">
+              <button
+                onClick={() => {
+                  handleReply(longPressMessage);
+                  setLongPressMessage(null);
+                }}
+                className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left cursor-pointer"
+              >
+                <Reply className="w-5 h-5" />
+                <span>Reply</span>
+              </button>
+
+              {longPressMessage.text && (
+                <button
+                  onClick={() => {
+                    handleCopy(longPressMessage.text);
+                    setLongPressMessage(null);
+                  }}
+                  className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left cursor-pointer"
+                >
+                  <Copy className="w-5 h-5" />
+                  <span>Copy</span>
+                </button>
+              )}
+
+              {longPressMessage.senderId._id === authUser._id && (
+                <>
+                  {longPressMessage.text && (
+                    <button
+                      onClick={() => {
+                        setEditingMessage(longPressMessage);
+                        setLongPressMessage(null);
+                      }}
+                      className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left cursor-pointer"
+                    >
+                      <Edit className="w-5 h-5" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      handleDelete(longPressMessage, false);
+                      setLongPressMessage(null);
+                    }}
+                    className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left cursor-pointer"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    <span>Delete for me</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleDelete(longPressMessage, true);
+                      setLongPressMessage(null);
+                    }}
+                    className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left text-red-500 cursor-pointer"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    <span>Delete for everyone</span>
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={() => setLongPressMessage(null)}
+                className="w-full px-4 py-3 bg-base-100 hover:bg-base-300 rounded-lg text-center cursor-pointer font-medium"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </>
       )}
