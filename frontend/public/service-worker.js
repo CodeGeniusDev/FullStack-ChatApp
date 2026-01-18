@@ -1,6 +1,6 @@
 // Service Worker for PWA functionality
 const CACHE_NAME = "chat-app-v1";
-const urlsToCache = ["/", "/index.html", "/avatar.png", "/bg.png"];
+const urlsToCache = ["/", "/index.html", "/avatar.png", "/favicon.ico", "/bg.png"];
 
 // Install event - cache assets
 self.addEventListener("install", (event) => {

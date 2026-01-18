@@ -383,7 +383,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                           <div
                             className={`absolute ${
                               isOwnMessage ? "right-0" : "left-0"
-                            } top-0 -translate-y-8 bg-base-300 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10`}
+                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-100`}
                           >
                             {reactionEmojis.map((emoji) => (
                               <button
