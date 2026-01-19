@@ -8,8 +8,10 @@ import { compressImage, debounce } from "../lib/utils";
 const MessageInput = ({ editingMessage, setEditingMessage }) => {
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
+  const [mediaPreviews, setMediaPreviews] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
@@ -30,37 +32,115 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   }, [editingMessage]);
 
   const handleImageChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
-      return;
+    await processFiles(files);
+  };
+
+  const processFiles = async (files) => {
+    const validFiles = [];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    for (const file of files) {
+      // Check file type
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+      const isAudio = file.type.startsWith("audio/");
+
+      if (!isImage && !isVideo && !isAudio) {
+        toast.error(`${file.name}: Unsupported file type`);
+        continue;
+      }
+
+      // Check file size
+      if (file.size > maxSize) {
+        toast.error(`${file.name}: File too large (max 10MB)`);
+        continue;
+      }
+
+      validFiles.push(file);
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size should be less than 5MB");
-      return;
-    }
+    if (validFiles.length === 0) return;
 
     setIsUploading(true);
-    toast.loading("Compressing image...", { id: "compress" });
+    toast.loading(`Processing ${validFiles.length} file(s)...`, { id: "process" });
 
     try {
-      const compressedBase64 = await compressImage(file, 1024, 1024, 0.8);
-      setImagePreview(compressedBase64);
-      toast.success("Image ready to send", { id: "compress" });
+      const previews = [];
+      
+      for (const file of validFiles) {
+        if (file.type.startsWith("image/")) {
+          const compressedBase64 = await compressImage(file, 1024, 1024, 0.8);
+          previews.push({ type: "image", data: compressedBase64, name: file.name });
+        } else if (file.type.startsWith("video/")) {
+          const base64 = await fileToBase64(file);
+          previews.push({ type: "video", data: base64, name: file.name });
+        } else if (file.type.startsWith("audio/")) {
+          const base64 = await fileToBase64(file);
+          previews.push({ type: "audio", data: base64, name: file.name });
+        }
+      }
+
+      setMediaPreviews(prev => [...prev, ...previews]);
+      toast.success(`${validFiles.length} file(s) ready to send`, { id: "process" });
     } catch (error) {
-      console.error("Image compression error:", error);
-      toast.error("Failed to process image", { id: "compress" });
+      console.error("File processing error:", error);
+      toast.error("Failed to process some files", { id: "process" });
     } finally {
       setIsUploading(false);
     }
   };
 
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeMedia = (index) => {
+    setMediaPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
   const removeImage = () => {
     setImagePreview(null);
+    setMediaPreviews([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Drag and drop handlers
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.target === e.currentTarget) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      await processFiles(files);
+    }
   };
 
   const handleTyping = (value) => {
@@ -72,15 +152,17 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   const handleSendMessage = async (e) => {
     e.preventDefault();
 
-    if (!text.trim() && !imagePreview) return;
+    if (!text.trim() && !imagePreview && mediaPreviews.length === 0) return;
 
     // Store values before clearing
     const messageText = text.trim();
     const messageImage = imagePreview;
+    const messageMedia = mediaPreviews;
 
     // IMMEDIATELY clear input for instant feedback
     setText("");
     setImagePreview(null);
+    setMediaPreviews([]);
     setTyping(false);
 
     if (fileInputRef.current) {
@@ -96,16 +178,31 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
         await editMessage(editingMessage._id, messageText);
         setEditingMessage(null);
       } else {
-        await sendMessage({
-          text: messageText,
-          image: messageImage,
-        });
+        // Send multiple messages if multiple media files
+        if (messageMedia.length > 0) {
+          for (const media of messageMedia) {
+            await sendMessage({
+              text: messageMedia.length === 1 ? messageText : "",
+              image: media.data,
+            });
+          }
+          // Send text separately if multiple media
+          if (messageMedia.length > 1 && messageText) {
+            await sendMessage({ text: messageText, image: null });
+          }
+        } else {
+          await sendMessage({
+            text: messageText,
+            image: messageImage,
+          });
+        }
       }
     } catch (error) {
       console.error("Failed to send/edit message:", error);
       // On error, restore the text
       setText(messageText);
       setImagePreview(messageImage);
+      setMediaPreviews(messageMedia);
     }
   };
 
@@ -123,7 +220,23 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   };
 
   return (
-    <div className="p-3 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/10">
+    <div 
+      className="p-3 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/10 relative"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag and Drop Overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg z-50 flex items-center justify-center">
+          <div className="text-center">
+            <Paperclip size={48} className="mx-auto mb-2 text-primary" />
+            <p className="text-lg font-semibold">Drop files here</p>
+            <p className="text-sm opacity-70">Images, videos, or audio files</p>
+          </div>
+        </div>
+      )}
       {/* Reply preview */}
       {replyingTo && (
         <div className="mb-2 flex items-center gap-2 backdrop-blur-md bg-base-200/70 p-2.5 rounded-lg border border-base-300/50">
@@ -165,8 +278,8 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
         </div>
       )}
 
-      {/* Image preview */}
-      {imagePreview && (
+      {/* Image preview (legacy - kept for single image) */}
+      {imagePreview && mediaPreviews.length === 0 && (
         <div className="mb-3 flex items-center gap-2">
           <div className="relative">
             <img
@@ -181,6 +294,45 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
             >
               <X className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Multiple Media Previews */}
+      {mediaPreviews.length > 0 && (
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-sm font-medium">{mediaPreviews.length} file(s) selected</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {mediaPreviews.map((media, index) => (
+              <div key={index} className="relative">
+                {media.type === "image" && (
+                  <img
+                    src={media.data}
+                    alt={media.name}
+                    className="w-20 h-20 object-cover rounded-lg border-2 border-base-300/50"
+                  />
+                )}
+                {media.type === "video" && (
+                  <div className="w-20 h-20 bg-base-300 rounded-lg border-2 border-base-300/50 flex items-center justify-center">
+                    <span className="text-2xl">🎥</span>
+                  </div>
+                )}
+                {media.type === "audio" && (
+                  <div className="w-20 h-20 bg-base-300 rounded-lg border-2 border-base-300/50 flex items-center justify-center">
+                    <span className="text-2xl">🎵</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => removeMedia(index)}
+                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error text-error-content flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                  type="button"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -205,11 +357,12 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
 
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,video/*,audio/*"
           className="hidden"
           ref={fileInputRef}
           onChange={handleImageChange}
           disabled={isUploading}
+          multiple
         />
 
         {/* Input + emoji */}
@@ -263,11 +416,11 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
         </div>
 
         {/* Send / Mic */}
-        {text.trim() || imagePreview ? (
+        {text.trim() || imagePreview || mediaPreviews.length > 0 ? (
           <button
             type="submit"
             className="btn btn-circle btn-primary btn-md shadow-lg hover:shadow-xl transition-all hover:scale-105"
-            disabled={(!text.trim() && !imagePreview) || isUploading}
+            disabled={(!text.trim() && !imagePreview && mediaPreviews.length === 0) || isUploading}
             title="Send message"
           >
             <Send size={20} className="ml-0.5" />

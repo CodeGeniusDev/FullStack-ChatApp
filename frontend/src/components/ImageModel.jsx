@@ -8,28 +8,61 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 
-const ImageModal = ({ user, message, onClose }) => {
+const ImageModal = ({ user, message, onClose, allMessages = [] }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [isStarred, setIsStarred] = useState(false);
-  const imageSrc = message?.image || user?.profilePic || "/avatar.png";
+  
+  // Get all images from messages
+  const imageMessages = allMessages.filter(msg => msg.image);
+  const currentIndex = imageMessages.findIndex(msg => 
+    msg._id === message?._id || msg.image === message?.image || msg === message
+  );
+  const [activeIndex, setActiveIndex] = useState(currentIndex >= 0 ? currentIndex : 0);
+  
+  const currentMessage = imageMessages[activeIndex] || message;
+  const imageSrc = currentMessage?.image || user?.profilePic || "/avatar.png";
 
-  const imgAlt = message?.image
+  const imgAlt = currentMessage?.image
     ? "Chat image"
     : user?.profilePic
     ? "Profile picture"
     : "Avatar";
 
-  const imageFrom = message?.image
+  const imageFrom = currentMessage?.image
     ? "chat"
     : user?.profilePic
     ? "profile"
     : "default";
+
+  const hasMultipleImages = imageMessages.length > 1;
+  const canGoNext = activeIndex < imageMessages.length - 1;
+  const canGoPrev = activeIndex > 0;
+
+  const goToNext = useCallback(() => {
+    if (canGoNext) {
+      setActiveIndex(prev => prev + 1);
+      setZoom(1);
+      setRotation(0);
+      setIsLoading(true);
+    }
+  }, [canGoNext]);
+
+  const goToPrev = useCallback(() => {
+    if (canGoPrev) {
+      setActiveIndex(prev => prev - 1);
+      setZoom(1);
+      setRotation(0);
+      setIsLoading(true);
+    }
+  }, [canGoPrev]);
 
   const handleShare = useCallback(
     async (e) => {
@@ -84,9 +117,19 @@ const ImageModal = ({ user, message, onClose }) => {
 
   useEffect(() => {
     const onEsc = (e) => e.key === "Escape" && onClose?.();
+    const onArrowKey = (e) => {
+      if (e.key === "ArrowLeft") goToPrev();
+      if (e.key === "ArrowRight") goToNext();
+    };
+    
     window.addEventListener("keydown", onEsc);
-    return () => window.removeEventListener("keydown", onEsc);
-  }, [onClose]);
+    window.addEventListener("keydown", onArrowKey);
+    
+    return () => {
+      window.removeEventListener("keydown", onEsc);
+      window.removeEventListener("keydown", onArrowKey);
+    };
+  }, [onClose, goToNext, goToPrev]);
 
   if (error) {
     return (
@@ -128,7 +171,9 @@ const ImageModal = ({ user, message, onClose }) => {
           <div>
             <div className="font-medium">
               {imageFrom === "chat"
-                ? "Image"
+                ? hasMultipleImages 
+                  ? `Image ${activeIndex + 1} of ${imageMessages.length}`
+                  : "Image"
                 : `${user?.fullName || "User"}'s Profile`}
             </div>
             <div className="text-sm font-light">
@@ -178,7 +223,7 @@ const ImageModal = ({ user, message, onClose }) => {
 
       {/* Image */}
       <div
-        className="flex-1 flex items-center justify-center p-4 pt-20 pb-20"
+        className="flex-1 flex items-center justify-center p-4 pt-20 pb-20 relative"
         onClick={(e) => e.stopPropagation()}
       >
         {isLoading && (
@@ -186,6 +231,18 @@ const ImageModal = ({ user, message, onClose }) => {
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-white" />
           </div>
         )}
+        
+        {/* Previous Button */}
+        {hasMultipleImages && canGoPrev && (
+          <button
+            onClick={goToPrev}
+            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-colors cursor-pointer z-10"
+            title="Previous image"
+          >
+            <ChevronLeft size={32} className="text-white" />
+          </button>
+        )}
+        
         <img
           src={imageSrc}
           alt={imgAlt}
@@ -194,6 +251,17 @@ const ImageModal = ({ user, message, onClose }) => {
           onLoad={() => setIsLoading(false)}
           onError={() => setError("Failed to load image")}
         />
+        
+        {/* Next Button */}
+        {hasMultipleImages && canGoNext && (
+          <button
+            onClick={goToNext}
+            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 rounded-full transition-colors cursor-pointer z-10"
+            title="Next image"
+          >
+            <ChevronRight size={32} className="text-white" />
+          </button>
+        )}
       </div>
 
       {/* Controls */}

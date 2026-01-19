@@ -6,7 +6,7 @@ import MessageSkeleton from "./skeletons/MessageSkeleton";
 import ChatHeader from "./ChatHeader";
 import MessagesInput from "./MessagesInput";
 import { formatMessageTime } from "../lib/utils";
-import { Check, CheckCheck, Reply, Trash2, Edit, Copy } from "lucide-react";
+import { Check, CheckCheck, Reply, Trash2, Edit, Copy, X } from "lucide-react";
 import ChatProfileOpener from "./ChatProfileOpener";
 import ImageModel from "./ImageModel";
 
@@ -40,6 +40,7 @@ const ChatContainer = ({ onClose, user, message }) => {
   const [longPressMessage, setLongPressMessage] = useState(null);
   const longPressTimer = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [reactionDetailsModal, setReactionDetailsModal] = useState(null);
 
   // Check if the selected user is typing (not yourself!)
   const isOtherUserTyping = typingUsers[selectedUser?._id] || false;
@@ -456,14 +457,26 @@ const ChatContainer = ({ onClose, user, message }) => {
                           {message.reactions &&
                             message.reactions.length > 0 && (
                               <div className="flex gap-1 mt-1 flex-wrap">
-                                {message.reactions.map((reaction, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-sm bg-base-200 border border-base-300 px-1.5 py-0.5 rounded-full"
-                                    title={reaction.userId.fullName}
+                                {/* Group reactions by emoji */}
+                                {Object.entries(
+                                  message.reactions.reduce((acc, reaction) => {
+                                    if (!acc[reaction.emoji]) {
+                                      acc[reaction.emoji] = [];
+                                    }
+                                    acc[reaction.emoji].push(reaction);
+                                    return acc;
+                                  }, {})
+                                ).map(([emoji, reactions]) => (
+                                  <button
+                                    key={emoji}
+                                    onClick={() => setReactionDetailsModal({ emoji, reactions, message })}
+                                    className="text-sm bg-base-200 border border-base-300 px-1.5 py-0.5 rounded-full hover:bg-base-300 cursor-pointer transition-colors flex items-center gap-1"
                                   >
-                                    {reaction.emoji}
-                                  </span>
+                                    <span>{emoji}</span>
+                                    {reactions.length > 1 && (
+                                      <span className="text-xs">{reactions.length}</span>
+                                    )}
+                                  </button>
                                 ))}
                               </div>
                             )}
@@ -710,7 +723,55 @@ const ChatContainer = ({ onClose, user, message }) => {
           onClose={closeImageModal}
           user={selectedUser}
           message={imageModal}
+          allMessages={messages}
         />
+      )}
+
+      {/* Reaction Details Modal */}
+      {reactionDetailsModal && (
+        <>
+          <div
+            className="fixed inset-0 z-[90] bg-black/50"
+            onClick={() => setReactionDetailsModal(null)}
+          />
+          <div className="fixed z-[95] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-base-200 rounded-lg shadow-xl p-4 min-w-[280px] max-w-[90vw] max-h-[80vh] overflow-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <span className="text-2xl">{reactionDetailsModal.emoji}</span>
+                <span>Reactions</span>
+              </h3>
+              <button
+                onClick={() => setReactionDetailsModal(null)}
+                className="btn btn-ghost btn-sm btn-circle"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-2">
+              {reactionDetailsModal.reactions.map((reaction, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 p-2 hover:bg-base-300 rounded-lg"
+                >
+                  <img
+                    src={reaction.userId.profilePic || "/avatar.png"}
+                    alt={reaction.userId.fullName}
+                    className="w-10 h-10 rounded-full"
+                  />
+                  <div className="flex-1">
+                    <p className="font-medium">{reaction.userId.fullName}</p>
+                    <p className="text-xs text-base-content/70">
+                      {reaction.userId._id === authUser._id ? "You" : 
+                       reaction.userId._id === reactionDetailsModal.message.senderId._id ? "Sender" : "Receiver"}
+                    </p>
+                  </div>
+                  <span className="text-xl">{reaction.emoji}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
       {isProfileOpen && selectedUser && (
