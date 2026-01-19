@@ -47,13 +47,13 @@ const ChatContainer = ({ onClose, user, message }) => {
   // Detect mobile device
   useEffect(() => {
     const checkIfMobile = () => {
-      setIsMobile(window.innerWidth <= 768 || 'ontouchstart' in window);
+      setIsMobile(window.innerWidth <= 768 || "ontouchstart" in window);
     };
-    
+
     checkIfMobile();
-    window.addEventListener('resize', checkIfMobile);
-    
-    return () => window.removeEventListener('resize', checkIfMobile);
+    window.addEventListener("resize", checkIfMobile);
+
+    return () => window.removeEventListener("resize", checkIfMobile);
   }, []);
 
   // Check if user is near bottom of chat
@@ -144,17 +144,17 @@ const ChatContainer = ({ onClose, user, message }) => {
 
   const handleContextMenu = (e, message) => {
     e.preventDefault();
-    
+
     // Don't show context menu on mobile (use long press instead)
     if (isMobile) return;
-    
+
     const menuWidth = 160;
     const menuHeight = 200; // Approximate height
     const padding = 10;
-    
+
     let x = e.clientX;
     let y = e.clientY;
-    
+
     // Adjust X position if menu would go off screen
     if (x + menuWidth > window.innerWidth - padding) {
       x = window.innerWidth - menuWidth - padding;
@@ -162,7 +162,7 @@ const ChatContainer = ({ onClose, user, message }) => {
     if (x < padding) {
       x = padding;
     }
-    
+
     // Adjust Y position if menu would go off screen
     if (y + menuHeight > window.innerHeight - padding) {
       y = window.innerHeight - menuHeight - padding;
@@ -170,7 +170,7 @@ const ChatContainer = ({ onClose, user, message }) => {
     if (y < padding) {
       y = padding;
     }
-    
+
     setContextMenu({
       x,
       y,
@@ -206,7 +206,7 @@ const ChatContainer = ({ onClose, user, message }) => {
       if (container) {
         container.scrollTop = scrollTop;
       }
-      
+
       // Close long press menu on mobile after reaction
       if (isMobile) {
         setLongPressMessage(null);
@@ -216,17 +216,20 @@ const ChatContainer = ({ onClose, user, message }) => {
   );
 
   // Handle long press for mobile
-  const handleTouchStart = useCallback((e, message) => {
-    if (!isMobile) return;
-    
-    longPressTimer.current = setTimeout(() => {
-      setLongPressMessage(message);
-      // Trigger haptic feedback if available
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
-    }, 500); // 500ms long press
-  }, [isMobile]);
+  const handleTouchStart = useCallback(
+    (e, message) => {
+      if (!isMobile) return;
+
+      longPressTimer.current = setTimeout(() => {
+        setLongPressMessage(message);
+        // Trigger haptic feedback if available
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+      }, 500); // 500ms long press
+    },
+    [isMobile]
+  );
 
   const handleTouchEnd = useCallback(() => {
     if (longPressTimer.current) {
@@ -377,7 +380,9 @@ const ChatContainer = ({ onClose, user, message }) => {
                     className={`chat ${
                       isOwnMessage ? "chat-end" : "chat-start"
                     }`}
-                    onMouseEnter={() => !isMobile && setHoveredMessage(message._id)}
+                    onMouseEnter={() =>
+                      !isMobile && setHoveredMessage(message._id)
+                    }
                     onMouseLeave={() => !isMobile && setHoveredMessage(null)}
                     onContextMenu={(e) => handleContextMenu(e, message)}
                     onTouchStart={(e) => handleTouchStart(e, message)}
@@ -464,14 +469,12 @@ const ChatContainer = ({ onClose, user, message }) => {
                             )}
                         </div>
 
-                        {/* Quick reactions - Desktop hover, Mobile long press */}
-                        {((hoveredMessage === message._id && !isMobile) || (longPressMessage?._id === message._id && isMobile)) && (
+                        {/* Quick reactions - Desktop hover ONLY */}
+                        {hoveredMessage === message._id && !isMobile && (
                           <div
                             className={`absolute ${
                               isOwnMessage ? "right-0" : "left-0"
-                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200 rounded-full px-2 py-1 flex gap-2 shadow-lg ${
-                              isMobile ? 'opacity-100 z-50' : 'opacity-0 group-hover:opacity-100 transition-opacity z-100'
-                            }`}
+                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-100`}
                           >
                             {reactionEmojis.map((emoji) => (
                               <button
@@ -480,7 +483,9 @@ const ChatContainer = ({ onClose, user, message }) => {
                                   e.stopPropagation();
                                   handleReaction(message._id, emoji);
                                 }}
-                                onMouseEnter={() => !isMobile && setHoveredMessage(message._id)}
+                                onMouseEnter={() =>
+                                  setHoveredMessage(message._id)
+                                }
                                 className="hover:scale-125 transition-transform cursor-pointer text-lg"
                               >
                                 {emoji}
@@ -607,7 +612,24 @@ const ChatContainer = ({ onClose, user, message }) => {
             onClick={() => setLongPressMessage(null)}
           />
           <div className="fixed z-50 bottom-0 left-0 right-0 bg-base-200 rounded-t-2xl shadow-xl pb-safe">
-            <div className="p-4 space-y-2">
+            <div className="p-4 space-y-3">
+              {/* Quick Reactions at Top */}
+              <div className="flex justify-center gap-3 py-3 border-b border-base-300">
+                {reactionEmojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleReaction(longPressMessage._id, emoji);
+                    }}
+                    className="text-2xl hover:scale-125 active:scale-110 transition-transform cursor-pointer p-2 hover:bg-base-300 rounded-full"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+
+              {/* Menu Options */}
               <button
                 onClick={() => {
                   handleReply(longPressMessage);
