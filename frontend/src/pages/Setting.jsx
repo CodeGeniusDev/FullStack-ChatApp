@@ -54,98 +54,140 @@ const SettingsPage = () => {
 
         {/* Preview Section */}
         <h3 className="text-lg font-semibold mb-3">Preview</h3>
-        <div className="rounded-xl border border-base-300 overflow-hidden bg-base-100 shadow-lg">
-          <div className="p-4 bg-base-200">
-            <div className="max-w-lg mx-auto">
-              {/* Mock Chat UI */}
-              <div className="bg-base-100 rounded-xl shadow-sm overflow-hidden">
-                {/* Chat Header */}
-                <div className="px-4 py-3 border-b border-base-300 bg-base-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-content font-medium">
-                      J
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-sm">John Doe</h3>
-                      <p className="text-xs text-base-content/70">Online</p>
+        <div className="w-full max-w-md mx-auto bg-base-100 rounded-lg overflow-hidden shadow-sm">
+          {/* Chat Header */}
+          <div className="bg-base-200 px-4 py-3 border-b border-base-300 flex items-center">
+            <div className="w-10 h-10 rounded-full bg-base-300 flex-shrink-0 mr-3 flex items-center justify-center">
+              <span className="text-gray-600">T</span>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-medium text-base-content">Jhon Joe</h3>
+              <p className="text-xs text-base-content/70">Last seen 3m ago</p>
+            </div>
+          </div>
+
+          {/* Chat Messages */}
+          <div className="p-4 space-y-4 bg-base-100 h-96 overflow-y-auto">
+            {PREVIEW_MESSAGES.map((message) => (
+              <div
+                key={message.id}
+                className={`chat ${message.isSent ? "chat-end" : "chat-start"}`}
+              >
+                {!message.isSent && (
+                  <div className="chat-image avatar">
+                    <div className="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center">
+                      <span className="text-xs text-gray-600">T</span>
                     </div>
                   </div>
-                </div>
-
-                {/* Chat Messages */}
-                <div className="p-4 space-y-4 min-h-[200px] max-h-[200px] overflow-y-auto bg-base-100">
-                  {PREVIEW_MESSAGES.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.isSent ? "justify-end" : "justify-start"}`}
+                )}
+                <div
+                  className={`chat-bubble ${message.isSent ? "bg-primary text-primary-content" : "bg-base-200 text-base-content"}`}
+                >
+                  <p className="text-sm">{message.content}</p>
+                  <div className="flex items-center justify-end gap-1 mt-1">
+                    <span
+                      className={`text-xs ${message.isSent ? "opacity-70" : "opacity-50"}`}
                     >
-                      <div
-                        className={`
-                            max-w-[80%] rounded-xl p-3 shadow-sm
-                            ${message.isSent ? "bg-primary text-primary-content" : "bg-base-200"}
-                          `}
+                      {message.isSent ? "02:43 AM" : "02:57 AM"}
+                    </span>
+                    {message.isSent && (
+                      <svg
+                        className="w-3 h-3 opacity-70"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
                       >
-                        <p className="text-sm">{message.content}</p>
-                        <p
-                          className={`
-                              text-[10px] mt-1.5
-                              ${message.isSent ? "text-primary-content/70" : "text-base-content/70"}
-                            `}
-                        >
-                          12:00 PM
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
+                  </div>
                 </div>
-
-                {/* Chat Input */}
-                <form className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-circle btn-ghost btn-sm sm:btn-md"
-                    title="Attach file"
-                  >
-                    <Paperclip size={20} />
-                  </button>
-
-                  <input type="file" accept="image/*" className="hidden" />
-
-                  {/* Input + emoji */}
-                  <div className="flex-1 backdrop-blur-lg bg-base-200/50 rounded-xl border border-base-300/50 flex items-end overflow-hidden">
-                    <textarea
-                      rows={1}
-                      className="flex-1 bg-transparent px-4 py-2.5 resize-none outline-none text-sm sm:text-base placeholder:text-base-content/50 max-h-32 overflow-y-auto"
-                      placeholder="Type a message..."
-                    />
-                  </div>
-
-                  {/* Emoji button moved outside */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="btn btn-circle btn-ghost btn-sm sm:btn-md"
-                    >
-                      <Smile size={20} />
-                    </button>
-                  </div>
-
-                  {/* Send / Mic */}
-                  <button
-                    className="btn btn-circle btn-primary btn-md shadow-lg hover:shadow-xl transition-all hover:scale-105"
-                    title="Send message"
-                  >
-                    <Send size={20} className="ml-0.5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-circle btn-ghost btn-md hover:bg-base-200/50 text-base-content/70 hover:text-base-content"
-                    title="Voice message"
-                  >
-                    <Mic size={20} />
-                  </button>
-                </form>
               </div>
+            ))}
+
+            {/* Sent Message */}
+            <div className="chat chat-end">
+              <div className="chat-bubble bg-primary text-primary-content">
+                <p className="text-sm">hi??</p>
+                <div className="flex items-center justify-end gap-1 mt-1">
+                  <span className="text-xs opacity-70">02:57 AM</span>
+                  <svg
+                    className="w-3 h-3 opacity-70"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Input Area */}
+          <div className="bg-base-200 border-t border-base-300 p-3">
+            <div className="flex items-center gap-2">
+              <button className="btn btn-circle btn-ghost btn-sm">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                  />
+                </svg>
+              </button>
+              <div className="flex-1 bg-base-100 rounded-xl px-4 py-2">
+                <input
+                  type="text"
+                  placeholder="Type a message..."
+                  className="w-full bg-transparent border-none focus:outline-none text-sm"
+                />
+              </div>
+              <button className="btn btn-circle btn-ghost btn-sm">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </button>
+              <button className="btn btn-circle btn-ghost btn-sm">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                  />
+                </svg>
+              </button>
             </div>
           </div>
         </div>

@@ -304,7 +304,7 @@ const ChatContainer = ({ onClose, user, message }) => {
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
       // Trigger file input in MessagesInput component
-      const fileEvent = new Event('dropFiles', { bubbles: true });
+      const fileEvent = new Event("dropFiles", { bubbles: true });
       fileEvent.files = files;
       window.dispatchEvent(fileEvent);
     }
@@ -361,28 +361,63 @@ const ChatContainer = ({ onClose, user, message }) => {
   const renderMessageText = (text) => {
     if (!text) return null;
 
-    const urlRegex = /(https?:\/\/[^\s]+)/gi;
-    const parts = text.split(urlRegex);
+    // Match URLs (http, https, ftp, etc.) - using non-capturing groups
+    const urlPattern = /(?:https?:\/\/|www\.|ftp:\/\/)[^\s]+/gi;
+    // Match email addresses - using non-capturing group
+    const emailPattern = /[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+/gi;
+    // Combined pattern
+    const combinedPattern = new RegExp(
+      `(${urlPattern.source}|${emailPattern.source})`,
+      "gi"
+    );
 
+    // Split text by both URL and email patterns
+    const parts = text.split(combinedPattern);
     return parts.map((part, index) => {
       if (!part) return null;
 
-      if (part.match(urlRegex)) {
+      // Check if part is a URL
+      if (part.match(urlPattern)) {
+        // Add https:// if it's a www link without protocol
+        const href = part.startsWith("www.") ? `https://${part}` : part;
         return (
           <a
             key={index}
-            href={part}
+            href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-400/95 underline hover:text-blue-400/60"
+            className="text-blue-400/95 underline hover:text-blue-400/60 break-words"
             onClick={(e) => e.stopPropagation()}
+            style={{ wordBreak: "break-all" }}
+          >
+            {part}
+          </a>
+        );
+      }
+      // Check if part is an email
+      else if (part.match(emailPattern)) {
+        return (
+          <a
+            key={index}
+            href={`mailto:${part}`}
+            className="text-blue-400/95 underline hover:text-blue-400/60 break-words"
+            onClick={(e) => e.stopPropagation()}
+            style={{ wordBreak: "break-all" }}
           >
             {part}
           </a>
         );
       }
 
-      return <span key={index}>{part}</span>;
+      return (
+        <span
+          key={index}
+          className="break-words"
+          style={{ wordBreak: "break-word" }}
+        >
+          {part}
+        </span>
+      );
     });
   };
 
@@ -405,7 +440,7 @@ const ChatContainer = ({ onClose, user, message }) => {
 
   return (
     <>
-      <div 
+      <div
         className="flex-1 flex flex-col overflow-hidden relative"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
@@ -418,11 +453,13 @@ const ChatContainer = ({ onClose, user, message }) => {
             <div className="text-center bg-base-100/90 p-8 rounded-lg shadow-xl">
               <div className="text-6xl mb-4">📁</div>
               <p className="text-2xl font-bold mb-2">Drop files here</p>
-              <p className="text-base-content/70">Images, videos, or audio files</p>
+              <p className="text-base-content/70">
+                Images, videos, or audio files
+              </p>
             </div>
           </div>
         )}
-        
+
         <ChatHeader />
 
         {/* Messages - FIXED: Added ref to track scroll */}
@@ -563,12 +600,20 @@ const ChatContainer = ({ onClose, user, message }) => {
                                 ).map(([emoji, reactions]) => (
                                   <button
                                     key={emoji}
-                                    onClick={() => setReactionDetailsModal({ emoji, reactions, message })}
+                                    onClick={() =>
+                                      setReactionDetailsModal({
+                                        emoji,
+                                        reactions,
+                                        message,
+                                      })
+                                    }
                                     className="text-sm bg-base-200 border border-base-300 px-1.5 py-0.5 rounded-full hover:bg-base-300 cursor-pointer transition-colors flex items-center gap-1"
                                   >
                                     <span>{emoji}</span>
                                     {reactions.length > 1 && (
-                                      <span className="text-xs">{reactions.length}</span>
+                                      <span className="text-xs">
+                                        {reactions.length}
+                                      </span>
                                     )}
                                   </button>
                                 ))}
@@ -841,7 +886,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="space-y-2">
               {reactionDetailsModal.reactions.map((reaction, idx) => (
                 <div
@@ -856,8 +901,12 @@ const ChatContainer = ({ onClose, user, message }) => {
                   <div className="flex-1">
                     <p className="font-medium">{reaction.userId.fullName}</p>
                     <p className="text-xs text-base-content/70">
-                      {reaction.userId._id === authUser._id ? "You" : 
-                       reaction.userId._id === reactionDetailsModal.message.senderId._id ? "Sender" : "Receiver"}
+                      {reaction.userId._id === authUser._id
+                        ? "You"
+                        : reaction.userId._id ===
+                            reactionDetailsModal.message.senderId._id
+                          ? "Sender"
+                          : "Receiver"}
                     </p>
                   </div>
                   <span className="text-xl">{reaction.emoji}</span>

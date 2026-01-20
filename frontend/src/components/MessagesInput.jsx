@@ -39,8 +39,8 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
       }
     };
 
-    window.addEventListener('dropFiles', handleDropFiles);
-    return () => window.removeEventListener('dropFiles', handleDropFiles);
+    window.addEventListener("dropFiles", handleDropFiles);
+    return () => window.removeEventListener("dropFiles", handleDropFiles);
   }, []);
 
   const handleImageChange = async (e) => {
@@ -77,15 +77,21 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
     if (validFiles.length === 0) return;
 
     setIsUploading(true);
-    toast.loading(`Processing ${validFiles.length} file(s)...`, { id: "process" });
+    toast.loading(`Processing ${validFiles.length} file(s)...`, {
+      id: "process",
+    });
 
     try {
       const previews = [];
-      
+
       for (const file of validFiles) {
         if (file.type.startsWith("image/")) {
           const compressedBase64 = await compressImage(file, 1024, 1024, 0.8);
-          previews.push({ type: "image", data: compressedBase64, name: file.name });
+          previews.push({
+            type: "image",
+            data: compressedBase64,
+            name: file.name,
+          });
         } else if (file.type.startsWith("video/")) {
           const base64 = await fileToBase64(file);
           previews.push({ type: "video", data: base64, name: file.name });
@@ -95,8 +101,10 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
         }
       }
 
-      setMediaPreviews(prev => [...prev, ...previews]);
-      toast.success(`${validFiles.length} file(s) ready to send`, { id: "process" });
+      setMediaPreviews((prev) => [...prev, ...previews]);
+      toast.success(`${validFiles.length} file(s) ready to send`, {
+        id: "process",
+      });
     } catch (error) {
       console.error("File processing error:", error);
       toast.error("Failed to process some files", { id: "process" });
@@ -115,7 +123,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   };
 
   const removeMedia = (index) => {
-    setMediaPreviews(prev => prev.filter((_, i) => i !== index));
+    setMediaPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
   const removeImage = () => {
@@ -193,8 +201,10 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
         // Send multiple messages if multiple media files
         if (messageMedia.length > 0) {
           for (const media of messageMedia) {
-            const payload = { text: messageMedia.length === 1 ? messageText : "" };
-            
+            const payload = {
+              text: messageMedia.length === 1 ? messageText : "",
+            };
+
             if (media.type === "image") {
               payload.image = media.data;
             } else if (media.type === "video") {
@@ -202,7 +212,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
             } else if (media.type === "audio") {
               payload.audio = media.data;
             }
-            
+
             await sendMessage(payload);
           }
           // Send text separately if multiple media
@@ -239,7 +249,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   };
 
   return (
-    <div 
+    <div
       className="p-3 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/10 relative"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -258,13 +268,28 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
       )}
       {/* Reply preview */}
       {replyingTo && (
-        <div className="mb-2 flex items-center gap-2 backdrop-blur-md bg-base-200/70 p-2.5 rounded-lg border border-base-300/50">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-primary font-semibold">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 backdrop-blur-md bg-base-200/70 p-2.5 rounded-lg border border-base-300/50">
+          <div className="overflow-hidden">
+            <p className="text-xs text-primary font-semibold truncate">
               Replying to {replyingTo.senderId.fullName}
             </p>
-            <p className="text-sm truncate opacity-70">
-              {replyingTo.text || "📷 Image"}
+            <p className="text-sm text-ellipsis line-clamp-2 break-words opacity-70">
+              {replyingTo.text ? (
+                <>
+                  <span className="sm:hidden">
+                    {replyingTo.text.length > 28
+                      ? `${replyingTo.text.substring(0, 28)}...`
+                      : replyingTo.text}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {replyingTo.text.length > 70
+                      ? `${replyingTo.text.substring(0, 70)}...`
+                      : replyingTo.text}
+                  </span>
+                </>
+              ) : (
+                "📷 Image"
+              )}
             </p>
           </div>
           <button
@@ -321,7 +346,9 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
       {mediaPreviews.length > 0 && (
         <div className="mb-3">
           <div className="flex items-center gap-2 mb-2">
-            <p className="text-sm font-medium">{mediaPreviews.length} file(s) selected</p>
+            <p className="text-sm font-medium">
+              {mediaPreviews.length} file(s) selected
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             {mediaPreviews.map((media, index) => (
@@ -439,7 +466,10 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
           <button
             type="submit"
             className="btn btn-circle btn-primary btn-md shadow-lg hover:shadow-xl transition-all hover:scale-105"
-            disabled={(!text.trim() && !imagePreview && mediaPreviews.length === 0) || isUploading}
+            disabled={
+              (!text.trim() && !imagePreview && mediaPreviews.length === 0) ||
+              isUploading
+            }
             title="Send message"
           >
             <Send size={20} className="ml-0.5" />
