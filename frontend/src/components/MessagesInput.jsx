@@ -31,6 +31,18 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
     }
   }, [editingMessage]);
 
+  // Listen for drop events from ChatContainer
+  useEffect(() => {
+    const handleDropFiles = (e) => {
+      if (e.files && e.files.length > 0) {
+        processFiles(e.files);
+      }
+    };
+
+    window.addEventListener('dropFiles', handleDropFiles);
+    return () => window.removeEventListener('dropFiles', handleDropFiles);
+  }, []);
+
   const handleImageChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -181,14 +193,21 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
         // Send multiple messages if multiple media files
         if (messageMedia.length > 0) {
           for (const media of messageMedia) {
-            await sendMessage({
-              text: messageMedia.length === 1 ? messageText : "",
-              image: media.data,
-            });
+            const payload = { text: messageMedia.length === 1 ? messageText : "" };
+            
+            if (media.type === "image") {
+              payload.image = media.data;
+            } else if (media.type === "video") {
+              payload.video = media.data;
+            } else if (media.type === "audio") {
+              payload.audio = media.data;
+            }
+            
+            await sendMessage(payload);
           }
           // Send text separately if multiple media
           if (messageMedia.length > 1 && messageText) {
-            await sendMessage({ text: messageText, image: null });
+            await sendMessage({ text: messageText });
           }
         } else {
           await sendMessage({

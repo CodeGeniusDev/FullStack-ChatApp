@@ -20,6 +20,17 @@ const messageSchema = new mongoose.Schema(
     image: {
       type: String,
     },
+    video: {
+      type: String,
+    },
+    audio: {
+      type: String,
+    },
+    mediaType: {
+      type: String,
+      enum: ["image", "video", "audio", null],
+      default: null,
+    },
     status: {
       type: String,
       enum: ["sent", "delivered", "read"],

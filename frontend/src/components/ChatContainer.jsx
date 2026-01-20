@@ -41,6 +41,8 @@ const ChatContainer = ({ onClose, user, message }) => {
   const longPressTimer = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
   const [reactionDetailsModal, setReactionDetailsModal] = useState(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const dragCounter = useRef(0);
 
   // Check if the selected user is typing (not yourself!)
   const isOtherUserTyping = typingUsers[selectedUser?._id] || false;
@@ -149,26 +151,40 @@ const ChatContainer = ({ onClose, user, message }) => {
     // Don't show context menu on mobile (use long press instead)
     if (isMobile) return;
 
-    const menuWidth = 160;
-    const menuHeight = 200; // Approximate height
-    const padding = 10;
+    const menuWidth = 200;
+    const menuHeight = 250; // Approximate height with all options
+    const padding = 16;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
     let x = e.clientX;
     let y = e.clientY;
 
-    // Adjust X position if menu would go off screen
-    if (x + menuWidth > window.innerWidth - padding) {
-      x = window.innerWidth - menuWidth - padding;
-    }
-    if (x < padding) {
-      x = padding;
+    // Horizontal positioning - ensure menu stays within viewport
+    if (x + menuWidth > viewportWidth - padding) {
+      // Position to the left of cursor
+      x = Math.max(padding, viewportWidth - menuWidth - padding);
     }
 
-    // Adjust Y position if menu would go off screen
-    if (y + menuHeight > window.innerHeight - padding) {
-      y = window.innerHeight - menuHeight - padding;
+    // If still not enough space on right, position on left side of cursor
+    if (x + menuWidth > viewportWidth - padding && x > menuWidth) {
+      x = x - menuWidth;
     }
-    if (y < padding) {
+
+    // Ensure minimum left padding
+    x = Math.max(padding, x);
+
+    // Vertical positioning
+    if (y + menuHeight > viewportHeight - padding) {
+      // Position above cursor if not enough space below
+      y = Math.max(padding, y - menuHeight);
+    }
+
+    // Ensure it doesn't go above viewport
+    y = Math.max(padding, y);
+
+    // Final check - if menu is still too tall, position at top
+    if (y + menuHeight > viewportHeight - padding) {
       y = padding;
     }
 
@@ -253,6 +269,45 @@ const ChatContainer = ({ onClose, user, message }) => {
         clearTimeout(longPressTimer.current);
       }
     };
+  }, []);
+
+  // Drag and drop handlers for entire chat area
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDraggingFile(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDraggingFile(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+    dragCounter.current = 0;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      // Trigger file input in MessagesInput component
+      const fileEvent = new Event('dropFiles', { bubbles: true });
+      fileEvent.files = files;
+      window.dispatchEvent(fileEvent);
+    }
   }, []);
 
   const handleImageClick = (message) => {
@@ -350,7 +405,24 @@ const ChatContainer = ({ onClose, user, message }) => {
 
   return (
     <>
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div 
+        className="flex-1 flex flex-col overflow-hidden relative"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Drag and Drop Overlay */}
+        {isDraggingFile && (
+          <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm border-4 border-dashed border-primary rounded-lg z-[60] flex items-center justify-center pointer-events-none">
+            <div className="text-center bg-base-100/90 p-8 rounded-lg shadow-xl">
+              <div className="text-6xl mb-4">📁</div>
+              <p className="text-2xl font-bold mb-2">Drop files here</p>
+              <p className="text-base-content/70">Images, videos, or audio files</p>
+            </div>
+          </div>
+        )}
+        
         <ChatHeader />
 
         {/* Messages - FIXED: Added ref to track scroll */}
@@ -427,6 +499,28 @@ const ChatContainer = ({ onClose, user, message }) => {
                               className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
                               onClick={() => handleImageClick(message)}
                             />
+                          )}
+
+                          {message.video && (
+                            <video
+                              src={message.video}
+                              controls
+                              className="sm:max-w-[300px] rounded-md mb-2"
+                              preload="metadata"
+                            >
+                              Your browser does not support video playback.
+                            </video>
+                          )}
+
+                          {message.audio && (
+                            <audio
+                              src={message.audio}
+                              controls
+                              className="w-full max-w-[280px] mb-2"
+                              preload="metadata"
+                            >
+                              Your browser does not support audio playback.
+                            </audio>
                           )}
 
                           {message.text && (

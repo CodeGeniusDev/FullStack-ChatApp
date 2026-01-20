@@ -103,15 +103,41 @@ export const getMessages = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image, replyTo } = req.body;
+    const { text, image, video, audio, replyTo } = req.body;
     const { id: receiverId } = req.params;
     const senderId = req.user._id;
 
-    let imageUrl;
+    let imageUrl, videoUrl, audioUrl, mediaType;
 
+    // Upload image
     if (image) {
-      const uploadResponse = await cloudinary.uploader.upload(image);
+      const uploadResponse = await cloudinary.uploader.upload(image, {
+        resource_type: "auto",
+        folder: "chat_images",
+      });
       imageUrl = uploadResponse.secure_url;
+      mediaType = "image";
+    }
+
+    // Upload video
+    if (video) {
+      const uploadResponse = await cloudinary.uploader.upload(video, {
+        resource_type: "video",
+        folder: "chat_videos",
+        chunk_size: 6000000, // 6MB chunks for large videos
+      });
+      videoUrl = uploadResponse.secure_url;
+      mediaType = "video";
+    }
+
+    // Upload audio
+    if (audio) {
+      const uploadResponse = await cloudinary.uploader.upload(audio, {
+        resource_type: "video", // Cloudinary uses 'video' for audio files too
+        folder: "chat_audio",
+      });
+      audioUrl = uploadResponse.secure_url;
+      mediaType = "audio";
     }
 
     const newMessage = new Message({
@@ -119,6 +145,9 @@ export const sendMessage = async (req, res) => {
       receiverId,
       text,
       image: imageUrl,
+      video: videoUrl,
+      audio: audioUrl,
+      mediaType,
       replyTo: replyTo || null,
       status: "sent",
     });
