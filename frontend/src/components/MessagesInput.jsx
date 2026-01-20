@@ -277,8 +277,8 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
               {replyingTo.text ? (
                 <>
                   <span className="sm:hidden">
-                    {replyingTo.text.length > 20
-                      ? `${replyingTo.text.substring(0, 20)}...`
+                    {replyingTo.text.length > 28
+                      ? `${replyingTo.text.substring(0, 28)}...`
                       : replyingTo.text}
                   </span>
                   <span className="hidden sm:inline">
