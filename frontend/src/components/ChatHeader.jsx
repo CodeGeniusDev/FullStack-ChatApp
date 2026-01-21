@@ -5,97 +5,21 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import ChatProfileOpener from "./ChatProfileOpener";
 import { formatLastSeen } from "../lib/utils";
-import { axiosInstance } from "../lib/axios";
-import toast from "react-hot-toast";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [imageModal, setImageModal] = useState(null);
+  const [activeTab, setActiveTab] = useState("contact");
 
   const handleProfileClick = (e) => {
+    // Ensure the profile tab is active when opening
+    setActiveTab("contact");
     e.stopPropagation();
     console.log("Opening profile...");
     setIsProfileOpen(true);
     // Close the dropdown
     document.activeElement?.blur();
-  };
-
-  const handleClearChat = async () => {
-    if (!selectedUser?._id) return;
-
-    if (
-      !window.confirm(
-        "Are you sure you want to clear this chat? This action cannot be undone."
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const response = await axiosInstance.delete(
-        `/messages/clear/${selectedUser._id}`
-      );
-
-      if (response.data.success) {
-        // Clear messages in the store
-        useChatStore.getState().messages = [];
-        // Refresh the chat
-        useChatStore.getState().getMessages(selectedUser._id);
-        toast.success("Chat cleared successfully");
-      }
-    } catch (error) {
-      console.error("Error clearing chat:", error);
-      toast.error(error.response?.data?.message || "Failed to clear chat");
-    } finally {
-      // Close the dropdown
-      document.activeElement?.blur();
-    }
-  };
-
-  const handleExportChat = async () => {
-    if (!selectedUser?._id) return;
-
-    try {
-      const { messages } = useChatStore.getState();
-
-      if (!messages.length) {
-        toast.info("No messages to export");
-        return;
-      }
-
-      // Format messages for export
-      const formattedMessages = messages
-        .map((msg) => {
-          const sender =
-            msg.senderId._id === selectedUser._id
-              ? selectedUser.fullName
-              : "You";
-          const time = new Date(msg.createdAt).toLocaleString();
-          return `[${time}] ${sender}: ${msg.text || (msg.image ? "[Image]" : "")}`;
-        })
-        .join("\n\n");
-
-      // Create a blob and download link
-      const blob = new Blob([formattedMessages], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `chat_with_${selectedUser.fullName.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast.success("Chat exported successfully");
-    } catch (error) {
-      console.error("Error exporting chat:", error);
-      toast.error("Failed to export chat");
-    } finally {
-      // Close the dropdown
-      document.activeElement?.blur();
-    }
   };
 
   return (
@@ -136,7 +60,7 @@ const ChatHeader = () => {
                     </>
                   ) : (
                     `Last seen ${formatLastSeen(
-                      selectedUser.updatedAt || selectedUser.lastSeen
+                      selectedUser.updatedAt || selectedUser.lastSeen,
                     )}`
                   )}
                 </p>
@@ -173,7 +97,7 @@ const ChatHeader = () => {
                 </>
               ) : (
                 `Last seen ${formatLastSeen(
-                  selectedUser.updatedAt || selectedUser.lastSeen
+                  selectedUser.updatedAt || selectedUser.lastSeen,
                 )}`
               )}
             </p>
@@ -193,10 +117,28 @@ const ChatHeader = () => {
               <a onClick={handleProfileClick}>View contact</a>
             </li>
             <li>
-              <a>Search</a>
+              <a
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveTab("search");
+                  setIsProfileOpen(true);
+                  document.activeElement?.blur();
+                }}
+              >
+                Search
+              </a>
             </li>
             <li>
-              <a>Media, links, and docs</a>
+              <a
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveTab("media");
+                  setIsProfileOpen(true);
+                  document.activeElement?.blur();
+                }}
+              >
+                Media, links, and docs
+              </a>
             </li>
             {/* line */}
             <div className="divider my-0"></div>
@@ -205,14 +147,32 @@ const ChatHeader = () => {
                 <summary>View more</summary>
                 <ul>
                   <li>
-                    <a onClick={handleClearChat}>
+                    <a
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveTab("clear");
+                        setIsProfileOpen(true);
+                        document.activeElement
+                          ?.closest("details")
+                          ?.removeAttribute("open");
+                      }}
+                    >
                       <div className="flex items-center gap-2">
                         <span>Clear chat</span>
                       </div>
                     </a>
                   </li>
                   <li>
-                    <a onClick={handleExportChat}>
+                    <a
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveTab("export");
+                        setIsProfileOpen(true);
+                        document.activeElement
+                          ?.closest("details")
+                          ?.removeAttribute("open");
+                      }}
+                    >
                       <div className="flex items-center gap-2">
                         <span>Export chat</span>
                       </div>
@@ -230,6 +190,8 @@ const ChatHeader = () => {
             setIsProfileOpen(false);
           }}
           user={selectedUser}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
         />
       )}
     </div>

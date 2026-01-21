@@ -6,7 +6,17 @@ import MessageSkeleton from "./skeletons/MessageSkeleton";
 import ChatHeader from "./ChatHeader";
 import MessagesInput from "./MessagesInput";
 import { formatMessageTime } from "../lib/utils";
-import { Check, CheckCheck, Reply, Trash2, Edit, Copy, X } from "lucide-react";
+import {
+  Check,
+  CheckCheck,
+  Reply,
+  Trash2,
+  Edit,
+  Copy,
+  X,
+  Plus,
+  ChevronLeft,
+} from "lucide-react";
 import ChatProfileOpener from "./ChatProfileOpener";
 import ImageModel from "./ImageModel";
 
@@ -27,9 +37,12 @@ const ChatContainer = ({ onClose, user, message }) => {
   const { authUser } = useAuthStore();
   const messageEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const contextMenuRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [hoveredMessage, setHoveredMessage] = useState(null);
+  const [showEmojiSet2, setShowEmojiSet2] = useState(false);
+  const [mobileShowEmojiSet2, setMobileShowEmojiSet2] = useState(false);
   const [imageModal, setImageModal] = useState(null);
   const [imageZoom, setImageZoom] = useState(1);
   const [imageRotation, setImageRotation] = useState(0);
@@ -41,6 +54,14 @@ const ChatContainer = ({ onClose, user, message }) => {
   const longPressTimer = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
   const [reactionDetailsModal, setReactionDetailsModal] = useState(null);
+  const [touchStartY, setTouchStartY] = useState(0);
+  const [touchY, setTouchY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [velocity, setVelocity] = useState(0);
+  const lastTouchTime = useRef(0);
+  const lastTouchY = useRef(0);
+  const menuRef = useRef(null);
+  const animationFrameId = useRef(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const dragCounter = useRef(0);
 
@@ -78,21 +99,26 @@ const ChatContainer = ({ onClose, user, message }) => {
     }
   }, []);
 
-  // Load messages when user changes
+  // CRITICAL FIX: Load messages when user changes
+  // DO NOT include function references in dependencies - they cause infinite loops!
   useEffect(() => {
     if (selectedUser?._id) {
+      console.log(
+        "📨 Loading messages for user:",
+        selectedUser.fullName,
+        "and ID:",
+        selectedUser._id,
+      );
       isInitialLoad.current = true;
       getMessages(selectedUser._id);
       subscribeToMessages();
     }
 
-    return () => unsubscribeFromMessages();
-  }, [
-    selectedUser?._id,
-    getMessages,
-    subscribeToMessages,
-    unsubscribeFromMessages,
-  ]);
+    return () => {
+      console.log("🔌 Unsubscribing from messages");
+      unsubscribeFromMessages();
+    };
+  }, [selectedUser?._id]); // ONLY depend on user ID - functions are stable in Zustand
 
   // Handle scrolling ONLY when appropriate
   useEffect(() => {
@@ -123,13 +149,7 @@ const ChatContainer = ({ onClose, user, message }) => {
 
       previousMessagesLength.current = messagesLength;
     }
-  }, [
-    messages,
-    isMessagesLoading,
-    scrollToBottom,
-    checkIfNearBottom,
-    shouldAutoScroll,
-  ]);
+  }, [messages.length, isMessagesLoading]); // ONLY depend on message count, not functions
 
   // Track scroll position to determine auto-scroll behavior
   useEffect(() => {
@@ -143,7 +163,129 @@ const ChatContainer = ({ onClose, user, message }) => {
 
     container.addEventListener("scroll", handleScroll);
     return () => container.removeEventListener("scroll", handleScroll);
-  }, [checkIfNearBottom]);
+  }, []); // Empty array - event listener doesn't need dependencies
+
+  // Add touch event listeners with passive: false and velocity calculation
+  useEffect(() => {
+    const menu = menuRef.current;
+    if (!menu) return;
+
+    const handleTouchMove = (e) => {
+      if (isDragging) {
+        const touch = e.touches[0];
+        const now = performance.now();
+        const deltaY = touch.clientY - lastTouchY.current;
+        const deltaTime = now - lastTouchTime.current;
+
+        if (deltaTime > 0) {
+          const newVelocity = deltaY / deltaTime;
+          setVelocity(newVelocity);
+        }
+
+        lastTouchY.current = touch.clientY;
+        lastTouchTime.current = now;
+        setTouchY(touch.clientY);
+        e.preventDefault();
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (isDragging) {
+        const dragDistance = touchY - touchStartY;
+        const shouldClose =
+          dragDistance > 100 || (dragDistance > 50 && velocity > 0.3);
+
+        if (shouldClose) {
+          setLongPressMessage(null);
+        } else {
+          // Animate back to position with easing
+          const startTime = performance.now();
+          const startY = touchY - touchStartY;
+
+          const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / 200, 1); // 200ms animation
+            const easing = 1 - Math.pow(1 - progress, 3); // Cubic ease-out
+            const currentY = startY * (1 - easing);
+
+            if (menuRef.current) {
+              menuRef.current.style.transform = `translateY(${currentY}px)`;
+            }
+
+            if (progress < 1) {
+              animationFrameId.current = requestAnimationFrame(animate);
+            } else if (menuRef.current) {
+              menuRef.current.style.transform = "";
+            }
+          };
+
+          animationFrameId.current = requestAnimationFrame(animate);
+        }
+
+        setIsDragging(false);
+        setVelocity(0);
+      }
+    };
+
+    menu.addEventListener("touchmove", handleTouchMove, { passive: false });
+    menu.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      menu.removeEventListener("touchmove", handleTouchMove);
+      menu.removeEventListener("touchend", handleTouchEnd);
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
+    };
+  }, [isDragging, touchStartY, touchY, velocity]); // Empty array - event listener doesn't need dependencies
+
+  // Adjust context menu position after render to use actual dimensions
+  useEffect(() => {
+    if (contextMenu && contextMenuRef.current) {
+      const menuElement = contextMenuRef.current;
+      const rect = menuElement.getBoundingClientRect();
+      const padding = 16;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let newX = contextMenu.x;
+      let newY = contextMenu.y;
+      let needsUpdate = false;
+
+      // Check if menu goes beyond right edge
+      if (rect.right > viewportWidth - padding) {
+        newX = viewportWidth - rect.width - padding;
+        needsUpdate = true;
+      }
+
+      // Check if menu goes beyond left edge
+      if (rect.left < padding) {
+        newX = padding;
+        needsUpdate = true;
+      }
+
+      // Check if menu goes beyond bottom edge
+      if (rect.bottom > viewportHeight - padding) {
+        newY = viewportHeight - rect.height - padding;
+        needsUpdate = true;
+      }
+
+      // Check if menu goes beyond top edge
+      if (rect.top < padding) {
+        newY = padding;
+        needsUpdate = true;
+      }
+
+      // Update position if needed
+      if (needsUpdate) {
+        setContextMenu({
+          ...contextMenu,
+          x: Math.max(padding, newX),
+          y: Math.max(padding, newY),
+        });
+      }
+    }
+  }, [contextMenu]);
 
   const handleContextMenu = (e, message) => {
     e.preventDefault();
@@ -160,32 +302,55 @@ const ChatContainer = ({ onClose, user, message }) => {
     let x = e.clientX;
     let y = e.clientY;
 
-    // Horizontal positioning - ensure menu stays within viewport
-    if (x + menuWidth > viewportWidth - padding) {
-      // Position to the left of cursor
-      x = Math.max(padding, viewportWidth - menuWidth - padding);
+    // Horizontal positioning - smart detection
+    const spaceOnRight = viewportWidth - x;
+    const spaceOnLeft = x;
+
+    if (spaceOnRight < menuWidth + padding) {
+      // Not enough space on right
+      if (spaceOnLeft >= menuWidth + padding) {
+        // Position to the left of cursor
+        x = x - menuWidth;
+      } else {
+        // Not enough space on either side, position at right edge with padding
+        x = viewportWidth - menuWidth - padding;
+      }
     }
 
-    // If still not enough space on right, position on left side of cursor
-    if (x + menuWidth > viewportWidth - padding && x > menuWidth) {
-      x = x - menuWidth;
-    }
-
-    // Ensure minimum left padding
+    // Ensure menu doesn't go beyond left edge
     x = Math.max(padding, x);
 
-    // Vertical positioning
-    if (y + menuHeight > viewportHeight - padding) {
-      // Position above cursor if not enough space below
-      y = Math.max(padding, y - menuHeight);
+    // Ensure menu doesn't go beyond right edge
+    if (x + menuWidth > viewportWidth - padding) {
+      x = viewportWidth - menuWidth - padding;
     }
 
-    // Ensure it doesn't go above viewport
+    // Vertical positioning - smart detection
+    const spaceBelow = viewportHeight - y;
+    const spaceAbove = y;
+
+    if (spaceBelow < menuHeight + padding) {
+      // Not enough space below
+      if (spaceAbove >= menuHeight + padding) {
+        // Position above cursor
+        y = y - menuHeight;
+      } else {
+        // Not enough space above or below
+        // Position at the edge that has more space
+        if (spaceAbove > spaceBelow) {
+          y = padding; // Top of screen
+        } else {
+          y = viewportHeight - menuHeight - padding; // Bottom of screen
+        }
+      }
+    }
+
+    // Ensure menu doesn't go beyond top edge
     y = Math.max(padding, y);
 
-    // Final check - if menu is still too tall, position at top
+    // Ensure menu doesn't go beyond bottom edge
     if (y + menuHeight > viewportHeight - padding) {
-      y = padding;
+      y = viewportHeight - menuHeight - padding;
     }
 
     setContextMenu({
@@ -229,7 +394,7 @@ const ChatContainer = ({ onClose, user, message }) => {
         setLongPressMessage(null);
       }
     },
-    [addReaction, isMobile]
+    [addReaction, isMobile],
   );
 
   // Handle long press for mobile
@@ -245,7 +410,7 @@ const ChatContainer = ({ onClose, user, message }) => {
         }
       }, 500); // 500ms long press
     },
-    [isMobile]
+    [isMobile],
   );
 
   const handleTouchEnd = useCallback(() => {
@@ -368,7 +533,7 @@ const ChatContainer = ({ onClose, user, message }) => {
     // Combined pattern
     const combinedPattern = new RegExp(
       `(${urlPattern.source}|${emailPattern.source})`,
-      "gi"
+      "gi",
     );
 
     // Split text by both URL and email patterns
@@ -426,7 +591,16 @@ const ChatContainer = ({ onClose, user, message }) => {
     setImageModal(null);
   };
 
-  const reactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+  // Reset emoji set when closing the long press menu
+  useEffect(() => {
+    if (!longPressMessage) {
+      setMobileShowEmojiSet2(false);
+    }
+  }, [longPressMessage]);
+
+  const reactionEmojisSet1 = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+  const reactionEmojisSet2 = ["😊", "😍", "🔥", "🎉", "👏", "🤔"];
+  const [activeEmojiSet, setActiveEmojiSet] = useState(reactionEmojisSet1);
 
   if (isMessagesLoading) {
     return (
@@ -523,7 +697,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                               <p className="font-semibold text-xs">
                                 {message.replyTo.senderId.fullName}
                               </p>
-                              <p className="truncate opacity-70">
+                              <p className="truncate  opacity-70">
                                 {message.replyTo.text || "Image"}
                               </p>
                             </div>
@@ -596,7 +770,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                                     }
                                     acc[reaction.emoji].push(reaction);
                                     return acc;
-                                  }, {})
+                                  }, {}),
                                 ).map(([emoji, reactions]) => (
                                   <button
                                     key={emoji}
@@ -626,23 +800,65 @@ const ChatContainer = ({ onClose, user, message }) => {
                           <div
                             className={`absolute ${
                               isOwnMessage ? "right-0" : "left-0"
-                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-100`}
+                            } top-0 -translate-y-8 backdrop-blur-lg bg-amber-100 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-100`}
                           >
-                            {reactionEmojis.map((emoji) => (
-                              <button
-                                key={emoji}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleReaction(message._id, emoji);
-                                }}
-                                onMouseEnter={() =>
-                                  setHoveredMessage(message._id)
-                                }
-                                className="hover:scale-125 transition-transform cursor-pointer text-lg"
-                              >
-                                {emoji}
-                              </button>
-                            ))}
+                            {!showEmojiSet2 ? (
+                              <>
+                                {reactionEmojisSet1.map((emoji) => (
+                                  <button
+                                    key={`set1-${emoji}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleReaction(message._id, emoji);
+                                    }}
+                                    onMouseEnter={() =>
+                                      setHoveredMessage(message._id)
+                                    }
+                                    className="hover:scale-125 transition-transform cursor-pointer text-lg"
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowEmojiSet2(true);
+                                    setActiveEmojiSet(reactionEmojisSet2);
+                                  }}
+                                  className="text-xl text-center items-center justify-center border border-base-300 transition-transform cursor-pointer p-1 hover:bg-base-300 rounded-full"
+                                >
+                                  <Plus className="w-5 h-5" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowEmojiSet2(false);
+                                    setActiveEmojiSet(reactionEmojisSet1);
+                                  }}
+                                  className="text-xl text-center items-center justify-center border border-base-300 transition-transform cursor-pointer p-1 hover:bg-base-300 rounded-full"
+                                >
+                                  <ChevronLeft className="w-5 h-5" />
+                                </button>
+                                {reactionEmojisSet2.map((emoji) => (
+                                  <button
+                                    key={`set2-${emoji}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleReaction(message._id, emoji);
+                                    }}
+                                    onMouseEnter={() =>
+                                      setHoveredMessage(message._id)
+                                    }
+                                    className="hover:scale-125 transition-transform cursor-pointer text-lg"
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -696,7 +912,8 @@ const ChatContainer = ({ onClose, user, message }) => {
             onClick={() => setContextMenu(null)}
           />
           <div
-            className="fixed z-50 bg-base-200 rounded-lg shadow-xl py-2 min-w-[160px]"
+            ref={contextMenuRef}
+            className="fixed z-50 bg-base-200 rounded-lg shadow-xl py-2 min-w-[160px] max-w-[240px]"
             style={{
               top: `${contextMenu.y}px`,
               left: `${contextMenu.x}px`,
@@ -763,22 +980,119 @@ const ChatContainer = ({ onClose, user, message }) => {
             className="fixed inset-0 z-40 bg-black/50"
             onClick={() => setLongPressMessage(null)}
           />
-          <div className="fixed z-50 bottom-0 left-0 right-0 bg-base-200 rounded-t-2xl shadow-xl pb-safe">
-            <div className="p-4 space-y-3">
+          <div
+            ref={menuRef}
+            className={`fixed z-50 left-0 right-0 backdrop-blur-xl bg-base-300/80 dark:bg-base-300/60 shadow-2xl pb-safe will-change-transform ${isDragging ? "transition-none" : "transition-transform duration-300 ease-[cubic-bezier(0.2,0,0.1,1)]"}`}
+            style={{
+              bottom: "0",
+              transform: isDragging
+                ? `translateY(${Math.max(0, (touchY - touchStartY) * 0.6)}px)`
+                : "translateY(0)",
+              touchAction: "pan-y",
+              // Add a slight scale effect when dragging down
+              transformOrigin: "bottom center",
+              ...(isDragging && {
+                transition: "none",
+                transform: `translateY(${Math.max(0, (touchY - touchStartY) * 0.6)}px) scale(${1 - Math.min(0.02, (touchY - touchStartY) * 0.0005)})`,
+              }),
+            }}
+            onTouchStart={(e) => {
+              // Only start drag from the top of the menu
+              if (e.touches[0].clientY < 100) {
+                const touch = e.touches[0];
+                setTouchStartY(touch.clientY);
+                setTouchY(touch.clientY);
+                lastTouchY.current = touch.clientY;
+                lastTouchTime.current = performance.now();
+                setIsDragging(true);
+
+                // Cancel any ongoing animations
+                if (animationFrameId.current) {
+                  cancelAnimationFrame(animationFrameId.current);
+                  animationFrameId.current = null;
+                }
+              }
+            }}
+          >
+            {/* iPhone-style handle bar with touch target */}
+            <div
+              className="w-full py-3 flex justify-center touch-none"
+              onTouchStart={(e) => {
+                setTouchStartY(e.touches[0].clientY);
+                setTouchY(e.touches[0].clientY);
+                setIsDragging(true);
+                // Prevent any parent touch events from interfering
+                e.stopPropagation();
+              }}
+            >
+              <div className="w-12 h-1.5 bg-base-content/30 dark:bg-base-content/20 rounded-full"></div>
+            </div>
+            <div className="px-4 pb-4 space-y-3">
               {/* Quick Reactions at Top */}
-              <div className="flex justify-center gap-3 py-3 border-b border-base-300">
-                {reactionEmojis.map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleReaction(longPressMessage._id, emoji);
-                    }}
-                    className="text-2xl hover:scale-125 active:scale-110 transition-transform cursor-pointer p-2 hover:bg-base-300 rounded-full"
-                  >
-                    {emoji}
-                  </button>
-                ))}
+              <div className="py-3 border-b border-base-300">
+                <div className="flex justify-center gap-4 mb-6">
+                  {!mobileShowEmojiSet2 ? (
+                    <div className="flex justify-center items-center gap-7">
+                      {reactionEmojisSet1.map((emoji) => (
+                        <button
+                          key={`mobile-set1-${emoji}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReaction(longPressMessage._id, emoji);
+                            setLongPressMessage(null);
+                          }}
+                          className="text-2xl active:scale-110 transition-transform cursor-pointer hover:bg-base-300 rounded-full"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMobileShowEmojiSet2(true);
+                        }}
+                        className="text-2xl p-1 active:bg-base-300 active:scale-110 border border-base-300 transition-transform cursor-pointer hover:bg-base-300 rounded-full flex items-center justify-center"
+                      >
+                        <Plus className="w-6 h-6" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex justify-center items-center gap-7">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMobileShowEmojiSet2(false);
+                        }}
+                        className="text-2xl p-1 active:bg-base-300 active:scale-110 border border-base-300 transition-transform cursor-pointer hover:bg-base-300 rounded-full flex items-center justify-center"
+                      >
+                        <ChevronLeft className="w-6 h-6" />
+                      </button>
+                      {reactionEmojisSet2.map((emoji) => (
+                        <button
+                          key={`mobile-set2-${emoji}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReaction(longPressMessage._id, emoji);
+                            setLongPressMessage(null);
+                          }}
+                          className="text-2xl active:scale-110 transition-transform cursor-pointer hover:bg-base-300 rounded-full"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-center mt-1">
+                  <div className="flex gap-1">
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full ${!mobileShowEmojiSet2 ? "bg-primary" : "bg-base-300"}`}
+                    ></div>
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full ${mobileShowEmojiSet2 ? "bg-primary" : "bg-base-300"}`}
+                    ></div>
+                  </div>
+                </div>
               </div>
 
               {/* Menu Options */}

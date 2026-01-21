@@ -39,12 +39,16 @@ const formatLastSeen = (date) => {
   });
 };
 
-const ChatProfileOpener = ({ onClose, user }) => {
+const ChatProfileOpener = ({
+  onClose,
+  user,
+  activeTab = "contact",
+  setActiveTab,
+}) => {
   const modalRef = useRef();
   const { onlineUsers } = useAuthStore();
   const { messages, deleteMessage } = useChatStore();
   const [imageModal, setImageModal] = useState(null);
-  const [activeTab, setActiveTab] = useState("contact");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -206,7 +210,7 @@ const ChatProfileOpener = ({ onClose, user }) => {
       const deletePromises = messages
         .filter(
           (msg) =>
-            msg.senderId._id === user._id || msg.receiverId?._id === user._id
+            msg.senderId._id === user._id || msg.receiverId?._id === user._id,
         )
         .map((msg) => deleteMessage(msg._id, false));
 
@@ -242,7 +246,7 @@ const ChatProfileOpener = ({ onClose, user }) => {
           <div className="flex flex-col md:flex-row h-[60vh] md:h-[50vh]">
             {/* left side - Mobile: Horizontal scroll, Desktop: Vertical */}
             <div className="w-full md:w-1/3 bg-base-100/40 border-b md:border-b-0 md:border-r border-base-300">
-              <div className="sticky top-0 backdrop-blur-lg bg-base-200/20">
+              <div className="sticky top-0 ">
                 {/* Mobile: Horizontal scrollable tabs */}
                 <div className="md:hidden overflow-x-auto">
                   <div className="flex p-2 gap-2 min-w-max">
@@ -285,7 +289,7 @@ const ChatProfileOpener = ({ onClose, user }) => {
                 </div>
 
                 {/* Desktop: Vertical menu */}
-                <ul className="menu w-full p-2 hidden md:block bg-base-200/40">
+                <ul className="menu w-full p-2 bg-transparent hidden md:block">
                   <li className="mb-1">
                     <a
                       className={`flex items-center gap-3 hover:bg-base-300 rounded-lg p-3 ${activeTab === "contact" ? "bg-base-300" : ""}`}
@@ -392,7 +396,7 @@ const ChatProfileOpener = ({ onClose, user }) => {
                           </>
                         ) : (
                           `Last seen ${formatLastSeen(
-                            user.updatedAt || user.lastSeen
+                            user.updatedAt || user.lastSeen,
                           )}`
                         )}
                       </p>
@@ -597,7 +601,7 @@ const ChatProfileOpener = ({ onClose, user }) => {
                                   </p>
                                   <p className="text-xs text-base-content/50">
                                     {new Date(
-                                      media.createdAt
+                                      media.createdAt,
                                     ).toLocaleDateString()}
                                   </p>
                                 </div>

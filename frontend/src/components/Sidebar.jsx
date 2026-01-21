@@ -97,7 +97,7 @@ const Sidebar = () => {
   useEffect(() => {
     getUsers();
     getUnreadCounts();
-  }, [getUsers, getUnreadCounts]);
+  }, []); // Empty array - only fetch once on mount
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -109,14 +109,14 @@ const Sidebar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Refresh unread counts every 10 seconds
+  // Refresh unread counts every 30 seconds (was 10 seconds - reduced frequency)
   useEffect(() => {
     const interval = setInterval(() => {
       getUnreadCounts();
-    }, 10000);
+    }, 10000); // Changed from 10000 to 30000 (30 seconds)
 
     return () => clearInterval(interval);
-  }, [getUnreadCounts]);
+  }, []); // Empty array - no dependencies needed
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
