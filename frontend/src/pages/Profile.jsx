@@ -5,6 +5,8 @@ import toast from "react-hot-toast";
 
 const ProfilePage = () => {
   const { authUser, isUpdatingProfile, updateProfile } = useAuthStore();
+  console.log("authUser:", authUser);
+  console.log("createdAt:", authUser?.createdAt);
   // const { updateBio,  }
   const [selectedImg, setSelectedImg] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -228,7 +230,35 @@ const ProfilePage = () => {
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between py-2 border-b border-base-300">
                 <span>Member Since</span>
-                <span>{authUser.createdAt?.split("T")[0]}</span>
+                <span>
+                  {(() => {
+                    try {
+                      // Try to parse the date from various possible formats
+                      const dateValue =
+                        authUser?.createdAt ||
+                        authUser?.user?.createdAt ||
+                        authUser?.data?.createdAt;
+
+                      if (!dateValue) return "Unknown";
+
+                      // Handle both string timestamps and Firestore timestamps
+                      const date = dateValue.toDate
+                        ? dateValue.toDate()
+                        : new Date(dateValue);
+
+                      if (isNaN(date.getTime())) return "Invalid date";
+
+                      return date.toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      });
+                    } catch (error) {
+                      console.error("Error formatting date:", error);
+                      return "Date error";
+                    }
+                  })()}
+                </span>
               </div>
               <div className="flex items-center justify-between py-2">
                 <span>Account Status</span>
