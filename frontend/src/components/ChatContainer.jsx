@@ -1032,7 +1032,7 @@ const ChatContainer = ({ onClose, user, message }) => {
               <div className="py-3 border-b border-base-300">
                 <div className="flex justify-center gap-4 mb-6">
                   {!mobileShowEmojiSet2 ? (
-                    <div className="flex justify-center items-center gap-6">
+                    <div className="flex justify-center items-center gap-5">
                       {reactionEmojisSet1.map((emoji) => (
                         <button
                           key={`mobile-set1-${emoji}`}
@@ -1057,7 +1057,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex justify-center items-center gap-6">
+                    <div className="flex justify-center items-center gap-5">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
