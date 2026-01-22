@@ -481,6 +481,13 @@ const ChatContainer = ({ onClose, user, message }) => {
     setImageRotation(0);
   };
 
+  // Handle video click - same as image
+  const handleVideoClick = (message) => {
+    setImageModal(message);
+    setImageZoom(1);
+    setImageRotation(0);
+  };
+
   const handleDownload = () => {
     if (!imageModal) return;
 
@@ -713,14 +720,34 @@ const ChatContainer = ({ onClose, user, message }) => {
                           )}
 
                           {message.video && (
-                            <video
-                              src={message.video}
-                              controls
-                              className="sm:max-w-[300px] rounded-md mb-2"
-                              preload="metadata"
+                            <div 
+                              className="relative sm:max-w-[300px] rounded-md mb-2 overflow-hidden cursor-pointer group"
+                              onClick={() => handleVideoClick(message)}
                             >
-                              Your browser does not support video playback.
-                            </video>
+                              <video
+                                src={message.video}
+                                className="w-full rounded-md"
+                                preload="metadata"
+                                onError={(e) => {
+                                  console.error("Video load error:", e);
+                                  e.target.style.display = 'none';
+                                }}
+                              >
+                                Your browser does not support video playback.
+                              </video>
+                              {/* Play button overlay */}
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                                <div className="w-14 h-14 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-colors">
+                                  <svg 
+                                    className="w-6 h-6 text-gray-800 ml-0.5" 
+                                    fill="currentColor" 
+                                    viewBox="0 0 16 16"
+                                  >
+                                    <path d="M5 3.5v9l7-4.5-7-4.5z"/>
+                                  </svg>
+                                </div>
+                              </div>
+                            </div>
                           )}
 
                           {message.audio && (
@@ -982,7 +1009,7 @@ const ChatContainer = ({ onClose, user, message }) => {
           />
           <div
             ref={menuRef}
-            className={`fixed z-50 left-0 right-0 backdrop-blur-xl bg-base-300/80 dark:bg-base-300/60 shadow-2xl pb-safe will-change-transform ${isDragging ? "transition-none" : "transition-transform duration-300 ease-[cubic-bezier(0.2,0,0.1,1)]"}`}
+            className={`fixed z-50 left-0 right-0 rounded-t-2xl backdrop-blur-xl bg-base-300/80 dark:bg-base-300/60 shadow-2xl pb-safe will-change-transform ${isDragging ? "transition-none" : "transition-transform duration-300 ease-[cubic-bezier(0.2,0,0.1,1)]"}`}
             style={{
               bottom: "0",
               transform: isDragging
