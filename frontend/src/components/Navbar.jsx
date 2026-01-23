@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { MessageSquare, Settings, User, LogOut, Download, Smartphone } from "lucide-react";
+import {
+  MessageSquare,
+  Settings,
+  User,
+  LogOut,
+  Download,
+  Smartphone,
+} from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 
 const Navbar = () => {
@@ -10,8 +17,8 @@ const Navbar = () => {
 
   useEffect(() => {
     // Check if already installed
-    const isInstalled = window.matchMedia('(display-mode: standalone)').matches;
-    
+    const isInstalled = window.matchMedia("(display-mode: standalone)").matches;
+
     if (!isInstalled) {
       // Listen for install prompt
       const handleBeforeInstallPrompt = (e) => {
@@ -20,16 +27,20 @@ const Navbar = () => {
         setShowInstallButton(true);
       };
 
-      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
       // Check iOS
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      if (isIOS && !localStorage.getItem('pwa-installed')) {
+      const isIOS =
+        /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIOS && !localStorage.getItem("pwa-installed")) {
         setShowInstallButton(true);
       }
 
       return () => {
-        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.removeEventListener(
+          "beforeinstallprompt",
+          handleBeforeInstallPrompt,
+        );
       };
     }
   }, []);
@@ -38,18 +49,18 @@ const Navbar = () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      
-      if (outcome === 'accepted') {
+
+      if (outcome === "accepted") {
         setShowInstallButton(false);
-        localStorage.setItem('pwa-installed', 'true');
+        localStorage.setItem("pwa-installed", "true");
       }
-      
+
       setDeferredPrompt(null);
     } else {
       // iOS or already prompted
       const message = /iPad|iPhone|iPod/.test(navigator.userAgent)
         ? 'Tap Share (⎙) then "Add to Home Screen" to install!'
-        : 'Install the app for a better experience!';
+        : "Install the app for a better experience!";
       alert(message);
     }
   };
@@ -66,7 +77,7 @@ const Navbar = () => {
               <div className="size-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
                 <MessageSquare className="w-5 h-5 text-primary" />
               </div>
-              <h1 className="text-lg font-bold tracking-wider transition-all">
+              <h1 className="text-lg hidden sm:block font-bold tracking-wider transition-all">
                 ChatGeniusX
               </h1>
             </Link>
@@ -84,7 +95,7 @@ const Navbar = () => {
                 <span className="hidden md:inline">Install App</span>
               </button>
             )}
-            
+
             {/* Mobile Install Button */}
             {showInstallButton && (
               <button

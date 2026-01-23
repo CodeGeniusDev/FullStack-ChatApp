@@ -16,6 +16,7 @@ import {
   X,
   Plus,
   ChevronLeft,
+  ArrowDown,
 } from "lucide-react";
 import ChatProfileOpener from "./ChatProfileOpener";
 import ImageModel from "./ImageModel";
@@ -646,7 +647,7 @@ const ChatContainer = ({ onClose, user, message }) => {
         {/* Messages - FIXED: Added ref to track scroll */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
+          className="flex-1 overflow-y-auto overflow-x-hidden px-1 sm:px-4 pt-6 space-y-4"
         >
           {messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
@@ -698,14 +699,26 @@ const ChatContainer = ({ onClose, user, message }) => {
 
                     <div className="">
                       <div className="relative group">
-                        <div className="chat-bubble bg-base-200 flex flex-col max-w-lg">
+                        <div className="chat-bubble bg-base-200 flex flex-col max-w-[20rem] sm:max-w-lg">
                           {message.replyTo && (
                             <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
                               <p className="font-semibold text-xs">
                                 {message.replyTo.senderId.fullName}
                               </p>
-                              <p className="truncate  opacity-70">
-                                {message.replyTo.text || "Image"}
+                              <p className="opacity-70">
+                                <span className="sm:hidden">
+                                  {message.replyTo.text &&
+                                    (message.replyTo.text.length > 28
+                                      ? `${message.replyTo.text.substring(0, 28)}...`
+                                      : message.replyTo.text)}
+                                </span>
+                                <span className="hidden sm:inline">
+                                  {message.replyTo.text &&
+                                    (message.replyTo.text.length > 70
+                                      ? `${message.replyTo.text.substring(0, 70)}...`
+                                      : message.replyTo.text)}
+                                </span>
+                                {!message.replyTo.text && "Image"}
                               </p>
                             </div>
                           )}
@@ -720,7 +733,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                           )}
 
                           {message.video && (
-                            <div 
+                            <div
                               className="relative sm:max-w-[300px] rounded-md mb-2 overflow-hidden cursor-pointer group"
                               onClick={() => handleVideoClick(message)}
                             >
@@ -730,7 +743,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                                 preload="metadata"
                                 onError={(e) => {
                                   console.error("Video load error:", e);
-                                  e.target.style.display = 'none';
+                                  e.target.style.display = "none";
                                 }}
                               >
                                 Your browser does not support video playback.
@@ -738,12 +751,12 @@ const ChatContainer = ({ onClose, user, message }) => {
                               {/* Play button overlay */}
                               <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
                                 <div className="w-14 h-14 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-colors">
-                                  <svg 
-                                    className="w-6 h-6 text-gray-800 ml-0.5" 
-                                    fill="currentColor" 
+                                  <svg
+                                    className="w-6 h-6 text-gray-800 ml-0.5"
+                                    fill="currentColor"
                                     viewBox="0 0 16 16"
                                   >
-                                    <path d="M5 3.5v9l7-4.5-7-4.5z"/>
+                                    <path d="M5 3.5v9l7-4.5-7-4.5z" />
                                   </svg>
                                 </div>
                               </div>
@@ -827,7 +840,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                           <div
                             className={`absolute ${
                               isOwnMessage ? "right-0" : "left-0"
-                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200/80 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-100`}
+                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200/70 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-100`}
                           >
                             {!showEmojiSet2 ? (
                               <>
@@ -897,7 +910,7 @@ const ChatContainer = ({ onClose, user, message }) => {
               {isOtherUserTyping && (
                 <div className="chat chat-start">
                   <div className="chat-image avatar">
-                    <div className="size-10 rounded-full border">
+                    <div className="size-10 rounded-full">
                       <img
                         src={selectedUser.profilePic || "/avatar.png"}
                         alt="profile pic"
@@ -919,6 +932,19 @@ const ChatContainer = ({ onClose, user, message }) => {
                   </div>
                 </div>
               )}
+
+              {/* Top to Bottom Button */}
+              {/* <button
+                onClick={() => {
+                  messagesContainerRef.current?.scrollTo({
+                    top: messagesContainerRef.current.scrollHeight,
+                    behavior: "smooth",
+                  });
+                }}
+                className="btn btn-circle btn-sm btn-ghost fixed left-[calc(50%+(--spacing(4)))] -translate-x-1/2 bottom-20 z-50"
+              >
+                <ArrowDown size={20} />
+              </button> */}
 
               <div ref={messageEndRef} />
             </>

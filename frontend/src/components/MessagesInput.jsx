@@ -21,7 +21,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
     useChatStore();
 
   const debouncedStopTyping = useRef(
-    debounce(() => setTyping(false), 3000)
+    debounce(() => setTyping(false), 3000),
   ).current;
 
   useEffect(() => {
@@ -266,11 +266,12 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
           </div>
         </div>
       )}
+      
       {/* Reply preview */}
       {replyingTo && (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 backdrop-blur-md bg-base-200/70 p-2.5 rounded-lg border border-base-300/50">
           <div className="overflow-hidden">
-            <p className="text-xs text-primary font-semibold truncate">
+            <p className="text-xs font-semibold truncate">
               Replying to {replyingTo.senderId.fullName}
             </p>
             <p className="text-sm text-ellipsis line-clamp-2 break-words opacity-70">
@@ -308,7 +309,18 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
             <p className="text-xs text-warning font-semibold">
               Editing message
             </p>
-            <p className="text-sm truncate opacity-70">{editingMessage.text}</p>
+            <p className="text-sm opacity-70">
+              <span className="sm:hidden">
+                {editingMessage.text.length > 28
+                  ? `${editingMessage.text.substring(0, 28)}...`
+                  : editingMessage.text}
+              </span>
+              <span className="hidden sm:inline">
+                {editingMessage.text.length > 70
+                  ? `${editingMessage.text.substring(0, 70)}...`
+                  : editingMessage.text}
+              </span>
+            </p>
           </div>
           <button
             onClick={() => {
@@ -429,7 +441,6 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
           />
         </div>
 
-        {/* Emoji button moved outside */}
         <div className="relative">
           <button
             type="button"
@@ -460,6 +471,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
             </div>
           )}
         </div>
+        {/* Emoji button moved outside */}
 
         {/* Send / Mic */}
         {text.trim() || imagePreview || mediaPreviews.length > 0 ? (
