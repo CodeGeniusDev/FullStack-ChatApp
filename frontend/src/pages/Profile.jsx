@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
+import { useChatStore } from "../store/useChatStore";
 import { Camera, Mail, User, MessageSquare, Save, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 const ProfilePage = () => {
-  const { authUser, isUpdatingProfile, updateProfile } = useAuthStore();
+  const { authUser, isUpdatingProfile, updateProfile, onlineUsers } =
+    useAuthStore();
+  const { selectedUser } = useChatStore();
+  const user = selectedUser || authUser;
+  const isOnline = onlineUsers.includes(user?._id);
   console.log("authUser:", authUser);
   console.log("createdAt:", authUser?.createdAt);
   // const { updateBio,  }
@@ -262,8 +267,10 @@ const ProfilePage = () => {
               </div>
               <div className="flex items-center justify-between py-2">
                 <span>Account Status</span>
-                <span className="text-green-500 bg-green-500/10 border border-green-500 px-2 py-1 rounded-full text-xs">
-                  Active
+                <span
+                  className={`${isOnline ? "text-green-500 bg-green-500/10 border-green-500" : "text-gray-500 bg-gray-500/10 border-gray-500"} border px-2 py-1 rounded-full text-xs`}
+                >
+                  {isOnline ? "Active" : "Offline"}
                 </span>
               </div>
             </div>

@@ -18,6 +18,8 @@ export const useChatStore = create((set, get) => ({
   replyingTo: null,
   typingUsers: {},
   notificationsEnabled: false,
+  pinnedContacts: [],
+  mutedChats: [],
 
   // Initialize notifications
   initNotifications: async () => {
@@ -103,6 +105,8 @@ export const useChatStore = create((set, get) => ({
       _id: `temp-${Date.now()}`,
       text: messageData.text,
       image: messageData.image,
+      video: messageData.video,
+      audio: messageData.audio,
       senderId: {
         _id: authUser._id,
         fullName: authUser.fullName,
@@ -127,14 +131,16 @@ export const useChatStore = create((set, get) => ({
     get().updateUserLastMessage(selectedUser._id, {
       text: optimisticMessage.text,
       image: optimisticMessage.image,
+      video: optimisticMessage.video,
+      audio: optimisticMessage.audio,
       createdAt: optimisticMessage.createdAt,
       senderId: authUser._id,
     });
 
     try {
       // Add validation if needed
-      if (!messageData.text && !messageData.image) {
-        throw new Error("Message must contain text or an image");
+      if (!messageData.text && !messageData.image && !messageData.video && !messageData.audio) {
+        throw new Error("Message must contain text or media");
       }
       const res = await axiosInstance.post(
         `/messages/send/${selectedUser._id}`,
@@ -156,6 +162,8 @@ export const useChatStore = create((set, get) => ({
       get().updateUserLastMessage(selectedUser._id, {
         text: res.data.text,
         image: res.data.image,
+        video: res.data.video,
+        audio: res.data.audio,
         createdAt: res.data.createdAt,
         senderId: res.data.senderId._id,
       });
@@ -256,14 +264,30 @@ export const useChatStore = create((set, get) => ({
 
   addReaction: async (messageId, emoji) => {
     try {
+      const { authUser } = useAuthStore.getState();
       const res = await axiosInstance.post(`/messages/reaction/${messageId}`, {
         emoji,
+      });
+
+      // Update the reactions with the current user's profile picture
+      const updatedReactions = res.data.reactions.map(reaction => {
+        if (reaction.userId._id === authUser._id) {
+          return {
+            ...reaction,
+            userId: {
+              ...reaction.userId,
+              profilePic: authUser.profilePic,
+              fullName: authUser.fullName
+            }
+          };
+        }
+        return reaction;
       });
 
       set({
         messages: get().messages.map((msg) =>
           msg._id === messageId
-            ? { ...msg, reactions: res.data.reactions }
+            ? { ...msg, reactions: updatedReactions }
             : msg
         ),
       });
@@ -409,9 +433,26 @@ export const useChatStore = create((set, get) => ({
 
     // Reaction added
     socket.on("reactionAdded", ({ messageId, reactions }) => {
+      const { authUser } = useAuthStore.getState();
+      
+      // Update reactions with the current user's profile picture if it's their reaction
+      const updatedReactions = reactions.map(reaction => {
+        if (reaction.userId._id === authUser._id) {
+          return {
+            ...reaction,
+            userId: {
+              ...reaction.userId,
+              profilePic: authUser.profilePic,
+              fullName: authUser.fullName
+            }
+          };
+        }
+        return reaction;
+      });
+
       set({
         messages: get().messages.map((msg) =>
-          msg._id === messageId ? { ...msg, reactions } : msg
+          msg._id === messageId ? { ...msg, reactions: updatedReactions } : msg
         ),
       });
     });
@@ -442,5 +483,57 @@ export const useChatStore = create((set, get) => ({
 
   setSelectedUser: (user) => {
     set({ selectedUser: user, replyingTo: null });
+  },
+
+  // Pin/unpin contacts
+  togglePinContact: (userId) => {
+    set((state) => {
+      const isPinned = state.pinnedContacts.includes(userId);
+      const newPinned = isPinned
+        ? state.pinnedContacts.filter((id) => id !== userId)
+        : [...state.pinnedContacts, userId];
+      
+      // Save to localStorage
+      if (typeof window !== "undefined") {
+        localStorage.setItem("pinnedContacts", JSON.stringify(newPinned));
+      }
+      
+      return { pinnedContacts: newPinned };
+    });
+  },
+
+  loadPinnedContacts: () => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("pinnedContacts");
+      if (saved) {
+        set({ pinnedContacts: JSON.parse(saved) });
+      }
+    }
+  },
+
+  // Mute/unmute chats
+  toggleMuteChat: (userId) => {
+    set((state) => {
+      const isMuted = state.mutedChats.includes(userId);
+      const newMuted = isMuted
+        ? state.mutedChats.filter((id) => id !== userId)
+        : [...state.mutedChats, userId];
+      
+      // Save to localStorage
+      if (typeof window !== "undefined") {
+        localStorage.setItem("mutedChats", JSON.stringify(newMuted));
+      }
+      
+      return { mutedChats: newMuted };
+    });
+  },
+
+  loadMutedChats: () => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("mutedChats");
+      if (saved) {
+        set({ mutedChats: JSON.parse(saved) });
+      }
+    }
   },
 }));

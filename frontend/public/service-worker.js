@@ -1,8 +1,12 @@
 // Service Worker for PWA functionality
 const CACHE_NAME = "chat-app-v1";
-const urlsToCache = ["/", "/index.html", "/avatar.png", "/favicon.ico", "/bg.png"];
+const urlsToCache = [
+  "/avatar.png",
+  "/favicon.ico",
+  "/bg.png"
+];
 
-// Install event - cache assets
+// Install event - cache static assets only
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
@@ -35,19 +39,44 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - NEVER cache HTML, JS, or CSS files
 self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  
+  // Skip caching for:
+  // - HTML files
+  // - JavaScript modules (.js, .jsx, .mjs)
+  // - CSS files
+  // - API calls
+  // - WebSocket connections
+  const skipCache = 
+    event.request.method !== 'GET' ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.jsx') ||
+    url.pathname.endsWith('.mjs') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.includes('/api/') ||
+    url.pathname.includes('/socket.io/') ||
+    url.protocol === 'ws:' ||
+    url.protocol === 'wss:';
+
+  if (skipCache) {
+    // Always fetch from network for these resources
+    return event.respondWith(fetch(event.request));
+  }
+
+  // For static assets (images, fonts), use cache-first strategy
   event.respondWith(
     caches
       .match(event.request)
       .then((response) => {
-        // Cache hit - return response
         if (response) {
           return response;
         }
 
         return fetch(event.request).then((response) => {
-          // Check if valid response
+          // Only cache successful responses for images and static assets
           if (
             !response ||
             response.status !== 200 ||
@@ -56,19 +85,26 @@ self.addEventListener("fetch", (event) => {
             return response;
           }
 
-          // Clone the response
-          const responseToCache = response.clone();
+          // Only cache image files and fonts
+          const isStaticAsset = 
+            url.pathname.match(/\.(png|jpg|jpeg|gif|svg|webp|ico|woff|woff2|ttf|eot)$/i);
 
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+          if (isStaticAsset) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
 
           return response;
         });
       })
       .catch(() => {
-        // Fallback page for offline
-        return caches.match("/index.html");
+        // For navigation requests, return nothing (let browser handle)
+        if (event.request.mode === 'navigate') {
+          return new Response('', { status: 404 });
+        }
+        return new Response('', { status: 404 });
       })
   );
 });
@@ -111,13 +147,11 @@ self.addEventListener("notificationclick", (event) => {
       clients
         .matchAll({ type: "window", includeUncontrolled: true })
         .then((clientList) => {
-          // Check if app is already open
           for (let client of clientList) {
             if (client.url === event.notification.data && "focus" in client) {
               return client.focus();
             }
           }
-          // Open new window
           if (clients.openWindow) {
             return clients.openWindow(event.notification.data || "/");
           }
@@ -134,6 +168,5 @@ self.addEventListener("sync", (event) => {
 });
 
 async function syncMessages() {
-  // Sync logic for offline messages
   console.log("Syncing messages...");
 }
