@@ -231,7 +231,14 @@ const ChatProfileOpener = ({
 
   return (
     <>
-      {imageModal && <ImageModel onClose={closeImageModal} user={user} />}
+      {imageModal && (
+        <ImageModel 
+          message={imageModal} 
+          onClose={closeImageModal} 
+          user={user} 
+          allMessages={messages}
+        />
+      )}
 
       <div
         className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
@@ -535,7 +542,7 @@ const ChatProfileOpener = ({
                               <div
                                 key={media._id}
                                 className="aspect-square rounded-lg overflow-hidden cursor-pointer group relative"
-                                onClick={() => setImageModal(media.url)}
+                                onClick={() => setImageModal(media)}
                               >
                                 <img
                                   src={media.url}
@@ -565,12 +572,25 @@ const ChatProfileOpener = ({
                               <div
                                 key={media._id}
                                 className="aspect-square rounded-lg overflow-hidden cursor-pointer group relative"
+                                onClick={() => setImageModal(media)}
                               >
                                 <video
                                   src={media.url}
                                   className="w-full h-full object-cover"
-                                  controls
+                                  preload="metadata"
                                 />
+                                {/* Play button overlay */}
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                                  <div className="w-12 h-12 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-colors">
+                                    <svg 
+                                      className="w-6 h-6 text-gray-800 ml-0.5" 
+                                      fill="currentColor" 
+                                      viewBox="0 0 16 16"
+                                    >
+                                      <path d="M5 3.5v9l7-4.5-7-4.5z"/>
+                                    </svg>
+                                  </div>
+                                </div>
                               </div>
                             ))
                           ) : (

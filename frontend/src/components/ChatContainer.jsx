@@ -65,6 +65,7 @@ const ChatContainer = ({ onClose, user, message }) => {
   const animationFrameId = useRef(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const dragCounter = useRef(0);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Check if the selected user is typing (not yourself!)
   const isOtherUserTyping = typingUsers[selectedUser?._id] || false;
@@ -160,6 +161,11 @@ const ChatContainer = ({ onClose, user, message }) => {
     const handleScroll = () => {
       const isNearBottom = checkIfNearBottom();
       setShouldAutoScroll(isNearBottom);
+
+      // Show scroll button when user scrolls up more than 300px from bottom
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      setShowScrollButton(distanceFromBottom > 300);
     };
 
     container.addEventListener("scroll", handleScroll);
@@ -242,121 +248,113 @@ const ChatContainer = ({ onClose, user, message }) => {
 
   // Adjust context menu position after render to use actual dimensions
   useEffect(() => {
-    if (contextMenu && contextMenuRef.current) {
-      const menuElement = contextMenuRef.current;
-      const rect = menuElement.getBoundingClientRect();
-      const padding = 16;
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      let newX = contextMenu.x;
-      let newY = contextMenu.y;
-      let needsUpdate = false;
-
-      // Check if menu goes beyond right edge
-      if (rect.right > viewportWidth - padding) {
-        newX = viewportWidth - rect.width - padding;
-        needsUpdate = true;
-      }
-
-      // Check if menu goes beyond left edge
-      if (rect.left < padding) {
-        newX = padding;
-        needsUpdate = true;
-      }
-
-      // Check if menu goes beyond bottom edge
-      if (rect.bottom > viewportHeight - padding) {
-        newY = viewportHeight - rect.height - padding;
-        needsUpdate = true;
-      }
-
-      // Check if menu goes beyond top edge
-      if (rect.top < padding) {
-        newY = padding;
-        needsUpdate = true;
-      }
-
-      // Update position if needed
-      if (needsUpdate) {
-        setContextMenu({
-          ...contextMenu,
-          x: Math.max(padding, newX),
-          y: Math.max(padding, newY),
-        });
-      }
-    }
-  }, [contextMenu]);
-
-  const handleContextMenu = (e, message) => {
-    e.preventDefault();
-
-    // Don't show context menu on mobile (use long press instead)
-    if (isMobile) return;
-
-    const menuWidth = 200;
-    const menuHeight = 250; // Approximate height with all options
+    if (!contextMenu || !contextMenuRef.current || contextMenu.positionLocked) return;
+    
+    const menuElement = contextMenuRef.current;
+    const rect = menuElement.getBoundingClientRect();
     const padding = 16;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    let x = e.clientX;
-    let y = e.clientY;
+    // Calculate optimal position based on available space
+    let newX = contextMenu.x;
+    let newY = contextMenu.y;
+    let needsAdjustment = false;
 
-    // Horizontal positioning - smart detection
-    const spaceOnRight = viewportWidth - x;
-    const spaceOnLeft = x;
-
-    if (spaceOnRight < menuWidth + padding) {
-      // Not enough space on right
-      if (spaceOnLeft >= menuWidth + padding) {
+    // Horizontal adjustment
+    const spaceOnRight = viewportWidth - newX;
+    const spaceOnLeft = newX;
+    
+    if (spaceOnRight < rect.width + padding) {
+      // Not enough space on right, try left
+      if (spaceOnLeft >= rect.width + padding) {
         // Position to the left of cursor
-        x = x - menuWidth;
+        newX = newX - rect.width;
       } else {
-        // Not enough space on either side, position at right edge with padding
-        x = viewportWidth - menuWidth - padding;
+        // Not enough space on either side, position at best available spot
+        newX = Math.max(padding, Math.min(newX, viewportWidth - rect.width - padding));
       }
+      needsAdjustment = true;
     }
-
+    
     // Ensure menu doesn't go beyond left edge
-    x = Math.max(padding, x);
-
+    if (newX < padding) {
+      newX = padding;
+      needsAdjustment = true;
+    }
+    
     // Ensure menu doesn't go beyond right edge
-    if (x + menuWidth > viewportWidth - padding) {
-      x = viewportWidth - menuWidth - padding;
+    if (newX + rect.width > viewportWidth - padding) {
+      newX = viewportWidth - rect.width - padding;
+      needsAdjustment = true;
     }
 
-    // Vertical positioning - smart detection
-    const spaceBelow = viewportHeight - y;
-    const spaceAbove = y;
-
-    if (spaceBelow < menuHeight + padding) {
-      // Not enough space below
-      if (spaceAbove >= menuHeight + padding) {
+    // Vertical adjustment
+    const spaceBelow = viewportHeight - newY;
+    const spaceAbove = newY;
+    
+    if (spaceBelow < rect.height + padding) {
+      // Not enough space below, try above
+      if (spaceAbove >= rect.height + padding) {
         // Position above cursor
-        y = y - menuHeight;
+        newY = newY - rect.height;
       } else {
-        // Not enough space above or below
-        // Position at the edge that has more space
-        if (spaceAbove > spaceBelow) {
-          y = padding; // Top of screen
-        } else {
-          y = viewportHeight - menuHeight - padding; // Bottom of screen
-        }
+        // Not enough space above or below, position at best available spot
+        newY = Math.max(padding, Math.min(newY, viewportHeight - rect.height - padding));
       }
+      needsAdjustment = true;
     }
-
+    
     // Ensure menu doesn't go beyond top edge
-    y = Math.max(padding, y);
-
+    if (newY < padding) {
+      newY = padding;
+      needsAdjustment = true;
+    }
+    
     // Ensure menu doesn't go beyond bottom edge
-    if (y + menuHeight > viewportHeight - padding) {
-      y = viewportHeight - menuHeight - padding;
+    if (newY + rect.height > viewportHeight - padding) {
+      newY = viewportHeight - rect.height - padding;
+      needsAdjustment = true;
     }
 
+    // Only update if adjustment is needed
+    if (needsAdjustment) {
+      // Use RAF for smooth update without triggering re-renders
+      const rafId = requestAnimationFrame(() => {
+        // Direct DOM manipulation to avoid state update loop
+        if (menuElement) {
+          menuElement.style.left = `${newX}px`;
+          menuElement.style.top = `${newY}px`;
+        }
+        
+        // Mark as adjusted in state
+        setContextMenu(prev => ({
+          ...prev,
+          x: newX,
+          y: newY,
+          positionLocked: true,
+        }));
+      });
+      
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [contextMenu?.message?._id, contextMenu?.positionLocked]); // Only depend on message ID and lock status
+
+  const handleContextMenu = (e, message) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Don't show context menu on mobile (use long press instead)
+    if (isMobile) return;
+
+    // Initial position at cursor
+    const initialX = e.clientX;
+    const initialY = e.clientY;
+
+    // Set initial position first (will be adjusted after render)
     setContextMenu({
-      x,
-      y,
+      x: initialX,
+      y: initialY,
       message,
     });
   };
@@ -599,6 +597,12 @@ const ChatContainer = ({ onClose, user, message }) => {
     setImageModal(null);
   };
 
+  const handleProfileClick = (e) => {
+    e.stopPropagation();
+    setIsProfileOpen(true);
+    document.activeElement?.blur();
+  };
+
   // Reset emoji set when closing the long press menu
   useEffect(() => {
     if (!longPressMessage) {
@@ -660,12 +664,6 @@ const ChatContainer = ({ onClose, user, message }) => {
               {messages.map((message) => {
                 const isOwnMessage = message.senderId._id === authUser._id;
 
-                const handleProfileClick = (e) => {
-                  e.stopPropagation();
-                  setIsProfileOpen(true);
-                  document.activeElement?.blur();
-                };
-
                 return (
                   <div
                     key={message._id}
@@ -699,7 +697,7 @@ const ChatContainer = ({ onClose, user, message }) => {
 
                     <div className="">
                       <div className="relative group">
-                        <div className="chat-bubble bg-base-200 flex flex-col max-w-[20rem] sm:max-w-lg">
+                        <div className="chat-bubble backdrop-blur-lg bg-base-300/50 flex flex-col max-w-[20rem] sm:max-w-lg">
                           {message.replyTo && (
                             <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
                               <p className="font-semibold text-xs">
@@ -767,7 +765,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                             <audio
                               src={message.audio}
                               controls
-                              className="w-full max-w-[280px] mb-2"
+                              className="mb-2"
                               preload="metadata"
                             >
                               Your browser does not support audio playback.
@@ -798,10 +796,10 @@ const ChatContainer = ({ onClose, user, message }) => {
                           </div>
                         </div>
 
-                        <div className="absolute -bottom-4 right-0">
+                        <div className="absolute -bottom-3 right-0">
                           {message.reactions &&
                             message.reactions.length > 0 && (
-                              <div className="flex gap-1 mt-1 flex-wrap">
+                              <div className="flex flex-wrap items-center">
                                 {/* Group reactions by emoji */}
                                 {Object.entries(
                                   message.reactions.reduce((acc, reaction) => {
@@ -811,26 +809,113 @@ const ChatContainer = ({ onClose, user, message }) => {
                                     acc[reaction.emoji].push(reaction);
                                     return acc;
                                   }, {}),
-                                ).map(([emoji, reactions]) => (
-                                  <button
-                                    key={emoji}
-                                    onClick={() =>
-                                      setReactionDetailsModal({
-                                        emoji,
-                                        reactions,
-                                        message,
-                                      })
-                                    }
-                                    className="text-sm bg-base-200 border border-base-300 px-1.5 py-0.5 rounded-full hover:bg-base-300 cursor-pointer transition-colors flex items-center gap-1"
-                                  >
-                                    <span>{emoji}</span>
-                                    {reactions.length > 1 && (
-                                      <span className="text-xs">
-                                        {reactions.length}
+                                ).map(([emoji, reactions]) => {
+                                  // Ensure we have the full user data for each reaction
+                                  const enrichedReactions = reactions.map(
+                                    (reaction) => {
+                                      // For the current user, use authUser data
+                                      if (
+                                        reaction.userId._id === authUser._id
+                                      ) {
+                                        return {
+                                          ...reaction,
+                                          userId: {
+                                            ...reaction.userId,
+                                            profilePic: authUser.profilePic,
+                                            fullName: authUser.fullName,
+                                          },
+                                        };
+                                      }
+                                      // For the message sender, use the message.senderId data
+                                      if (
+                                        reaction.userId._id ===
+                                        message.senderId._id
+                                      ) {
+                                        return {
+                                          ...reaction,
+                                          userId: {
+                                            ...reaction.userId,
+                                            profilePic:
+                                              message.senderId.profilePic,
+                                            fullName: message.senderId.fullName,
+                                          },
+                                        };
+                                      }
+                                      // For other users, ensure we have at least the basic data
+                                      return {
+                                        ...reaction,
+                                        userId: {
+                                          _id: reaction.userId._id,
+                                          fullName:
+                                            reaction.userId.fullName || "User",
+                                          profilePic:
+                                            reaction.userId.profilePic ||
+                                            "/avatar.png",
+                                        },
+                                      };
+                                    },
+                                  );
+
+                                  return (
+                                    <button
+                                      key={emoji}
+                                      onClick={() => {
+                                        setReactionDetailsModal({
+                                          emoji,
+                                          reactions: enrichedReactions,
+                                          message,
+                                        });
+                                      }}
+                                      className="group relative inline-flex items-center gap-1.5 bg-base-100/10 backdrop-blur-lg border border-base-300/80 rounded-full px-1.5 py-0.5 hover:bg-base-200 hover:border-base-300 cursor-pointer transition-all hover:scale-105 shadow-md hover:shadow-lg"
+                                      title={enrichedReactions
+                                        .map((r) => r.userId.fullName)
+                                        .join(", ")}
+                                    >
+                                      {/* User Avatars */}
+                                      {/* <div className="flex -space-x-2">
+                                        {enrichedReactions
+                                          .slice(0, 3)
+                                          .map((reaction, idx) => (
+                                            <div
+                                              key={`${reaction.userId._id}-${idx}`}
+                                              className="relative"
+                                              style={{
+                                                zIndex:
+                                                  enrichedReactions.length -
+                                                  idx,
+                                              }}
+                                            >
+                                              <img
+                                                src={
+                                                  reaction.userId.profilePic ||
+                                                  "/avatar.png"
+                                                }
+                                                alt={reaction.userId.fullName}
+                                                className="w-4 h-4 rounded-full object-cover"
+                                              />
+                                            </div>
+                                          ))}
+                                        {enrichedReactions.length > 3 && (
+                                          <div className="w-5 h-5 rounded-full ring-2 ring-base-100 bg-base-300 flex items-center justify-center text-[9px] font-bold">
+                                            +{enrichedReactions.length - 3}
+                                          </div>
+                                        )}
+                                      </div> */}
+
+                                      {/* Emoji */}
+                                      <span className="text-md leading-none">
+                                        {emoji}
                                       </span>
-                                    )}
-                                  </button>
-                                ))}
+
+                                      {/* Count badge (only if more than 1 user) */}
+                                      {enrichedReactions.length > 1 && (
+                                        <span className="text-[10px] font-semibold text-base-content/70 leading-none">
+                                          {enrichedReactions.length}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             )}
                         </div>
@@ -933,18 +1018,16 @@ const ChatContainer = ({ onClose, user, message }) => {
                 </div>
               )}
 
-              {/* Top to Bottom Button */}
-              {/* <button
-                onClick={() => {
-                  messagesContainerRef.current?.scrollTo({
-                    top: messagesContainerRef.current.scrollHeight,
-                    behavior: "smooth",
-                  });
-                }}
-                className="btn btn-circle btn-sm btn-ghost fixed left-[calc(50%+(--spacing(4)))] -translate-x-1/2 bottom-20 z-50"
-              >
-                <ArrowDown size={20} />
-              </button> */}
+              {/* Scroll to bottom button */}
+              {showScrollButton && (
+                <button
+                  onClick={() => scrollToBottom("smooth")}
+                  className="fixed right-6 bottom-24 z-50 btn btn-circle btn-primary shadow-lg hover:shadow-xl transition-all"
+                  title="Scroll to bottom"
+                >
+                  <ArrowDown size={20} />
+                </button>
+              )}
 
               <div ref={messageEndRef} />
             </>
@@ -966,10 +1049,11 @@ const ChatContainer = ({ onClose, user, message }) => {
           />
           <div
             ref={contextMenuRef}
-            className="fixed z-50 bg-base-200 rounded-lg shadow-xl py-2 min-w-[160px] max-w-[240px]"
+            className="fixed z-50 bg-base-200 rounded-lg shadow-xl py-2 min-w-[160px] max-w-[240px] opacity-0 animate-[fadeIn_0.15s_ease-out_forwards]"
             style={{
               top: `${contextMenu.y}px`,
               left: `${contextMenu.x}px`,
+              willChange: 'transform',
             }}
           >
             <button
@@ -1240,7 +1324,7 @@ const ChatContainer = ({ onClose, user, message }) => {
             className="fixed inset-0 z-[90] bg-black/50"
             onClick={() => setReactionDetailsModal(null)}
           />
-          <div className="fixed z-[95] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-base-200 rounded-lg shadow-xl p-4 min-w-[280px] max-w-[90vw] max-h-[80vh] overflow-auto">
+          <div className="fixed z-[95] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 backdrop-blur-lg bg-base-200/90 rounded-lg shadow-xl p-4 min-w-[280px] max-w-[90vw] max-h-[80vh] overflow-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <span className="text-2xl">{reactionDetailsModal.emoji}</span>

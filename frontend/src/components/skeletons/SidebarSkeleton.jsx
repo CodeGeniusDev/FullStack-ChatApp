@@ -1,19 +1,44 @@
-import { Users } from "lucide-react";
+import { Users, Search } from "lucide-react";
 
 const SidebarSkeleton = () => {
   // Create 8 skeleton items
   const skeletonContacts = Array(8).fill(null);
 
   return (
-    <aside
-      className="h-full w-20 lg:w-72 border-r border-base-300 
-    flex flex-col transition-all duration-200"
-    >
+    <aside className="w-full lg:w-auto lg:min-w-[280px] lg:max-w-[500px] border-r border-base-300 flex flex-col bg-base-100 h-full relative">
       {/* Header */}
-      <div className="border-b border-base-300 w-full p-5">
-        <div className="flex items-center gap-2">
-          <Users className="w-6 h-6" />
-          <span className="font-medium hidden lg:block">Contacts</span>
+      <div className="border-b border-base-300 w-full px-5 py-3 sticky top-0 bg-base-100 z-10">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-center lg:justify-start gap-2">
+            <div className="relative">
+              <button className="bg-base-200 p-2 rounded-full hover:bg-base-300 transition-colors cursor-pointer">
+                <Users className="w-6 h-6" />
+              </button>
+            </div>
+
+            <span className="font-medium hidden lg:block">Contacts</span>
+          </div>
+
+          <div className="hidden lg:flex items-center justify-between">
+            <label className="cursor-pointer flex items-center gap-2">
+              <input type="checkbox" className="checkbox checkbox-xs" />
+              <span className="text-xs">Show online only</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="px-3 py-2 border-b border-base-300">
+        <div className="relative">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
+            <Search className="w-4 h-4" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search contacts..."
+            className="w-full bg-base-200 rounded-lg px-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
         </div>
       </div>
 

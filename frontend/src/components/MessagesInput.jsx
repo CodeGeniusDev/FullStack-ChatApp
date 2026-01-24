@@ -205,6 +205,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
               text: messageMedia.length === 1 ? messageText : "",
             };
 
+            // FIXED: Correctly send video and audio data
             if (media.type === "image") {
               payload.image = media.data;
             } else if (media.type === "video") {
@@ -235,11 +236,35 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
     }
   };
 
-  const handleEmojiClick = (emojiObject) => {
-    setText((prev) => prev + emojiObject.emoji);
-    setShowEmojiPicker(false);
+  const handleEmojiClick = (emojiData, event) => {
+    setText((prev) => prev + emojiData.emoji);
     textareaRef.current?.focus();
   };
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      const emojiPicker = document.querySelector(".emoji-picker-react");
+      const emojiButton = document.querySelector(
+        '[data-testid="emoji-button"]',
+      );
+
+      if (
+        showEmojiPicker &&
+        emojiPicker &&
+        !emojiPicker.contains(event.target) &&
+        emojiButton &&
+        !emojiButton.contains(event.target)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showEmojiPicker]);
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -257,7 +282,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
       onDrop={handleDrop}
     >
       {/* Drag and Drop Overlay */}
-      {isDragging && (
+      {/* {isDragging && (
         <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg z-50 flex items-center justify-center">
           <div className="text-center">
             <Paperclip size={48} className="mx-auto mb-2 text-primary" />
@@ -265,8 +290,8 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
             <p className="text-sm opacity-70">Images, videos, or audio files</p>
           </div>
         </div>
-      )}
-      
+      )} */}
+
       {/* Reply preview */}
       {replyingTo && (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 backdrop-blur-md bg-base-200/70 p-2.5 rounded-lg border border-base-300/50">
@@ -444,7 +469,8 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
         <div className="relative">
           <button
             type="button"
-            className="btn btn-circle btn-ghost btn-sm sm:btn-md"
+            data-testid="emoji-button"
+            className="btn btn-ghost btn-sm btn-circle text-gray-400 hover:text-gray-600 transition-colors"
             onClick={(e) => {
               e.stopPropagation();
               setShowEmojiPicker(!showEmojiPicker);
@@ -455,18 +481,14 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
 
           {showEmojiPicker && (
             <div className="absolute bottom-full right-0 mb-2 z-[100]">
-              <div
-                className="fixed inset-0 -z-10"
-                onClick={() => setShowEmojiPicker(false)}
-              />
               <EmojiPicker
                 onEmojiClick={handleEmojiClick}
                 theme="dark"
                 width={280}
                 height={400}
-                searchDisabled
-                skinTonesDisabled
-                previewConfig={{ showPreview: false }}
+                // searchDisabled
+                // skinTonesDisabled
+                // previewConfig={{ showPreview: true }}
               />
             </div>
           )}
