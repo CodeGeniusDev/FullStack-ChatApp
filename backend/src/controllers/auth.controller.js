@@ -35,6 +35,7 @@ export const signup = async (req, res) => {
         email: newUser.email,
         profilePic: newUser.profilePic,
         bio: newUser.bio,
+        createdAt: newUser.createdAt,
       });
     } else {
       return res.status(400).json({ message: "User not created" });
@@ -64,6 +65,7 @@ export const login = async (req, res) => {
       email: user.email,
       profilePic: user.profilePic,
       bio: user.bio,
+      createdAt: user.createdAt,
       message: "User logged in successfully",
     });
   } catch (error) {
@@ -172,6 +174,7 @@ export const checkAuth = (req, res) => {
       email: user.email,
       profilePic: user.profilePic,
       bio: user.bio,
+      createdAt: user.createdAt,
       // Add other non-sensitive fields as needed
     };
     res.status(200).json(userData);

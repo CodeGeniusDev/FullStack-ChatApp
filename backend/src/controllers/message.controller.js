@@ -111,39 +111,54 @@ export const sendMessage = async (req, res) => {
 
     // Upload image
     if (image) {
-      const uploadResponse = await cloudinary.uploader.upload(image, {
-        resource_type: "auto",
-        folder: "chat_images",
-      });
-      imageUrl = uploadResponse.secure_url;
-      mediaType = "image";
+      try {
+        const uploadResponse = await cloudinary.uploader.upload(image, {
+          resource_type: "auto",
+          folder: "chat_images",
+        });
+        imageUrl = uploadResponse.secure_url;
+        mediaType = "image";
+      } catch (uploadError) {
+        console.error("Image upload error:", uploadError);
+        return res.status(500).json({ error: "Failed to upload image" });
+      }
     }
 
     // Upload video
     if (video) {
-      const uploadResponse = await cloudinary.uploader.upload(video, {
-        resource_type: "video",
-        folder: "chat_videos",
-        chunk_size: 6000000, // 6MB chunks for large videos
-      });
-      videoUrl = uploadResponse.secure_url;
-      mediaType = "video";
+      try {
+        const uploadResponse = await cloudinary.uploader.upload(video, {
+          resource_type: "video",
+          folder: "chat_videos",
+          chunk_size: 6000000, // 6MB chunks for large videos
+        });
+        videoUrl = uploadResponse.secure_url;
+        mediaType = "video";
+      } catch (uploadError) {
+        console.error("Video upload error:", uploadError);
+        return res.status(500).json({ error: "Failed to upload video" });
+      }
     }
 
     // Upload audio
     if (audio) {
-      const uploadResponse = await cloudinary.uploader.upload(audio, {
-        resource_type: "video", // Cloudinary uses 'video' for audio files too
-        folder: "chat_audio",
-      });
-      audioUrl = uploadResponse.secure_url;
-      mediaType = "audio";
+      try {
+        const uploadResponse = await cloudinary.uploader.upload(audio, {
+          resource_type: "video", // Cloudinary uses 'video' for audio files too
+          folder: "chat_audio",
+        });
+        audioUrl = uploadResponse.secure_url;
+        mediaType = "audio";
+      } catch (uploadError) {
+        console.error("Audio upload error:", uploadError);
+        return res.status(500).json({ error: "Failed to upload audio" });
+      }
     }
 
     const newMessage = new Message({
       senderId,
       receiverId,
-      text,
+      text: text || "",
       image: imageUrl,
       video: videoUrl,
       audio: audioUrl,
