@@ -486,7 +486,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
                 theme="dark"
                 width={280}
                 height={400}
-                // searchDisabled
+                searchDisabled
                 // skinTonesDisabled
                 // previewConfig={{ showPreview: true }}
               />

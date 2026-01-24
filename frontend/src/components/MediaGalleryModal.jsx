@@ -42,6 +42,8 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
 
   // Get all media (images and videos) from messages
   const mediaMessages = allMessages.filter((msg) => msg.image || msg.video);
+
+  // Find the index of the current message in the media messages array
   const currentIndex = mediaMessages.findIndex(
     (msg) =>
       msg._id === message?._id ||
@@ -49,36 +51,42 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
       msg.video === message?.video ||
       msg === message,
   );
+
+  // Set initial active index based on whether we found the message in mediaMessages
   const [activeIndex, setActiveIndex] = useState(
     currentIndex >= 0 ? currentIndex : 0,
   );
 
-  const currentMessage = mediaMessages[activeIndex] || message;
-  const isVideo = !!currentMessage?.video;
-  const mediaSrc =
-    currentMessage?.video ||
-    currentMessage?.image ||
-    user?.profilePic ||
-    "/avatar.png";
+  // Always use the message prop if it exists and has media, otherwise use the indexed message
+  const currentMessage =
+    message?.image || message?.video
+      ? message
+      : mediaMessages[activeIndex] || message;
 
-  const mediaAlt = currentMessage?.video
-    ? "Chat video"
-    : currentMessage?.image
-      ? "Chat image"
-      : user?.profilePic
-        ? "Profile picture"
-        : "Avatar";
+  // Determine if we're in profile view or chat media view
+  const isProfileView = !message?.image && !message?.video && user?.profilePic;
 
-  const mediaFrom =
-    currentMessage?.video || currentMessage?.image
-      ? "chat"
-      : user?.profilePic
-        ? "profile"
-        : "default";
+  // Set media source based on view type
+  let mediaSrc, mediaAlt, mediaFrom, isVideo;
 
-  const hasMultipleMedia = mediaMessages.length > 1;
-  const canGoNext = activeIndex < mediaMessages.length - 1;
-  const canGoPrev = activeIndex > 0;
+  if (isProfileView) {
+    // For profile view
+    mediaSrc = user.profilePic;
+    mediaAlt = "Profile picture";
+    mediaFrom = "profile";
+    isVideo = false;
+  } else {
+    // For chat media view
+    isVideo = !!currentMessage?.video;
+    mediaSrc = currentMessage?.video || currentMessage?.image || "/avatar.png";
+    mediaAlt = isVideo ? "Chat video" : "Chat image";
+    mediaFrom = "chat";
+  }
+
+  // Only show navigation if there are multiple media items and we're not in profile view
+  const hasMultipleMedia = !isProfileView && mediaMessages.length > 1;
+  const canGoNext = !isProfileView && activeIndex < mediaMessages.length - 1;
+  const canGoPrev = !isProfileView && activeIndex > 0;
 
   // Video player functions
   const togglePlay = useCallback(() => {

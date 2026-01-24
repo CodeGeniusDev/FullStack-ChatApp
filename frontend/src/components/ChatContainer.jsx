@@ -765,7 +765,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                             <audio
                               src={message.audio}
                               controls
-                              className="mb-2"
+                              className="w-70 mb-2"
                               preload="metadata"
                             >
                               Your browser does not support audio playback.
