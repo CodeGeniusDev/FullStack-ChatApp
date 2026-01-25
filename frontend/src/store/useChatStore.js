@@ -20,6 +20,10 @@ export const useChatStore = create((set, get) => ({
   notificationsEnabled: false,
   pinnedContacts: [],
   mutedChats: [],
+  // Pagination state
+  currentPage: 1,
+  hasMoreMessages: false,
+  isLoadingMore: false,
 
   // Initialize notifications
   initNotifications: async () => {
@@ -52,6 +56,8 @@ export const useChatStore = create((set, get) => ({
             lastMessage: {
               text: message.text,
               image: message.image,
+              video: message.video,
+              audio: message.audio,
               createdAt: message.createdAt,
               senderId: message.senderId,
             },
@@ -72,13 +78,18 @@ export const useChatStore = create((set, get) => ({
   },
 
   getMessages: async (userId) => {
-    set({ isMessagesLoading: true });
+    set({ isMessagesLoading: true, currentPage: 1 });
     try {
       if (!userId) {
         throw new Error("No user ID provided");
       }
-      const res = await axiosInstance.get(`/messages/user/${userId}`);
-      set({ messages: res.data || [] });
+      const res = await axiosInstance.get(`/messages/user/${userId}?page=1&limit=50`);
+      
+      set({ 
+        messages: res.data.messages || [],
+        hasMoreMessages: res.data.pagination?.hasMore || false,
+        currentPage: 1,
+      });
 
       // Mark messages as read
       await get().markMessagesAsRead(userId);
@@ -88,6 +99,34 @@ export const useChatStore = create((set, get) => ({
       set({ messages: [] });
     } finally {
       set({ isMessagesLoading: false });
+    }
+  },
+
+  // Load more messages (pagination)
+  loadMoreMessages: async (userId) => {
+    const { currentPage, hasMoreMessages, isLoadingMore } = get();
+    
+    if (!hasMoreMessages || isLoadingMore) return;
+    
+    set({ isLoadingMore: true });
+    try {
+      const nextPage = currentPage + 1;
+      const res = await axiosInstance.get(
+        `/messages/user/${userId}?page=${nextPage}&limit=50`
+      );
+      
+      const olderMessages = res.data.messages || [];
+      
+      set((state) => ({
+        messages: [...olderMessages, ...state.messages],
+        currentPage: nextPage,
+        hasMoreMessages: res.data.pagination?.hasMore || false,
+        isLoadingMore: false,
+      }));
+    } catch (error) {
+      console.error("Error loading more messages:", error);
+      toast.error("Failed to load more messages");
+      set({ isLoadingMore: false });
     }
   },
 
@@ -138,10 +177,10 @@ export const useChatStore = create((set, get) => ({
     });
 
     try {
-      // Add validation if needed
       if (!messageData.text && !messageData.image && !messageData.video && !messageData.audio) {
         throw new Error("Message must contain text or media");
       }
+      
       const res = await axiosInstance.post(
         `/messages/send/${selectedUser._id}`,
         {
@@ -149,7 +188,6 @@ export const useChatStore = create((set, get) => ({
           replyTo: replyingTo?._id || null,
         }
       );
-      // return res.data;
 
       // Replace optimistic message with real one
       set({
@@ -314,15 +352,33 @@ export const useChatStore = create((set, get) => ({
 
   clearReplyingTo: () => set({ replyingTo: null }),
 
+  // Debounced typing indicator
+  typingTimeout: null,
   setTyping: (isTyping) => {
-    const { selectedUser } = get();
+    const { selectedUser, typingTimeout } = get();
     const socket = useAuthStore.getState().socket;
 
     if (socket && selectedUser) {
+      // Clear previous timeout
+      if (typingTimeout) {
+        clearTimeout(typingTimeout);
+      }
+
       socket.emit("typing", {
         receiverId: selectedUser._id,
         isTyping,
       });
+
+      // Auto-stop typing after 3 seconds
+      if (isTyping) {
+        const newTimeout = setTimeout(() => {
+          socket.emit("typing", {
+            receiverId: selectedUser._id,
+            isTyping: false,
+          });
+        }, 3000);
+        set({ typingTimeout: newTimeout });
+      }
     }
   },
 
@@ -332,6 +388,15 @@ export const useChatStore = create((set, get) => ({
 
     const socket = useAuthStore.getState().socket;
     if (!socket) return;
+
+    // Remove any existing listeners first
+    socket.off("newMessage");
+    socket.off("messagesDelivered");
+    socket.off("messagesRead");
+    socket.off("messageDeleted");
+    socket.off("messageEdited");
+    socket.off("reactionAdded");
+    socket.off("userTyping");
 
     // New message
     socket.on("newMessage", (newMessage) => {
@@ -343,6 +408,8 @@ export const useChatStore = create((set, get) => ({
       get().updateUserLastMessage(newMessage.senderId._id, {
         text: newMessage.text,
         image: newMessage.image,
+        video: newMessage.video,
+        audio: newMessage.audio,
         createdAt: newMessage.createdAt,
         senderId: newMessage.senderId._id,
       });
@@ -372,13 +439,15 @@ export const useChatStore = create((set, get) => ({
           playNotificationSound();
         }
 
-        // Show toast notification
-        toast.success(
-          `New message from ${newMessage.senderId.fullName || "User"}`,
-          {
-            duration: 3000,
-          }
-        );
+        // Show toast notification (only if not on the page)
+        if (document.hidden) {
+          toast.success(
+            `New message from ${newMessage.senderId.fullName || "User"}`,
+            {
+              duration: 3000,
+            }
+          );
+        }
 
         return;
       }
@@ -465,6 +534,18 @@ export const useChatStore = create((set, get) => ({
           [senderId]: isTyping,
         },
       });
+      
+      // Auto-clear typing indicator after 3.5 seconds
+      if (isTyping) {
+        setTimeout(() => {
+          set({
+            typingUsers: {
+              ...get().typingUsers,
+              [senderId]: false,
+            },
+          });
+        }, 3500);
+      }
     });
   },
 
@@ -482,7 +563,7 @@ export const useChatStore = create((set, get) => ({
   },
 
   setSelectedUser: (user) => {
-    set({ selectedUser: user, replyingTo: null });
+    set({ selectedUser: user, replyingTo: null, currentPage: 1 });
   },
 
   // Pin/unpin contacts

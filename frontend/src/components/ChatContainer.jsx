@@ -17,6 +17,7 @@ import {
   Plus,
   ChevronLeft,
   ArrowDown,
+  Loader2,
 } from "lucide-react";
 import ChatProfileOpener from "./ChatProfileOpener";
 import ImageModel from "./ImageModel";
@@ -33,6 +34,9 @@ const ChatContainer = ({ onClose, user, message }) => {
     deleteMessage,
     addReaction,
     typingUsers,
+    loadMoreMessages,
+    hasMoreMessages,
+    isLoadingMore,
   } = useChatStore();
 
   const { authUser } = useAuthStore();
@@ -162,13 +166,27 @@ const ChatContainer = ({ onClose, user, message }) => {
       const isNearBottom = checkIfNearBottom();
       setShouldAutoScroll(isNearBottom);
 
-      // Show scroll button when user scrolls up more than 300px from bottom
+      // Show scroll button when user scrolls up more than 200px from bottom (WhatsApp-like)
       const { scrollTop, scrollHeight, clientHeight } = container;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      setShowScrollButton(distanceFromBottom > 300);
+
+      const shouldShow = distanceFromBottom > 200;
+
+      // Debug logging
+      if (shouldShow !== showScrollButton) {
+        console.log(
+          `📊 Scroll button ${shouldShow ? "SHOW" : "HIDE"} - Distance from bottom: ${Math.round(distanceFromBottom)}px`,
+        );
+      }
+
+      setShowScrollButton(shouldShow);
     };
 
     container.addEventListener("scroll", handleScroll);
+
+    // Also check on initial mount
+    handleScroll();
+
     return () => container.removeEventListener("scroll", handleScroll);
   }, []); // Empty array - event listener doesn't need dependencies
 
@@ -248,8 +266,9 @@ const ChatContainer = ({ onClose, user, message }) => {
 
   // Adjust context menu position after render to use actual dimensions
   useEffect(() => {
-    if (!contextMenu || !contextMenuRef.current || contextMenu.positionLocked) return;
-    
+    if (!contextMenu || !contextMenuRef.current || contextMenu.positionLocked)
+      return;
+
     const menuElement = contextMenuRef.current;
     const rect = menuElement.getBoundingClientRect();
     const padding = 16;
@@ -264,7 +283,7 @@ const ChatContainer = ({ onClose, user, message }) => {
     // Horizontal adjustment
     const spaceOnRight = viewportWidth - newX;
     const spaceOnLeft = newX;
-    
+
     if (spaceOnRight < rect.width + padding) {
       // Not enough space on right, try left
       if (spaceOnLeft >= rect.width + padding) {
@@ -272,17 +291,20 @@ const ChatContainer = ({ onClose, user, message }) => {
         newX = newX - rect.width;
       } else {
         // Not enough space on either side, position at best available spot
-        newX = Math.max(padding, Math.min(newX, viewportWidth - rect.width - padding));
+        newX = Math.max(
+          padding,
+          Math.min(newX, viewportWidth - rect.width - padding),
+        );
       }
       needsAdjustment = true;
     }
-    
+
     // Ensure menu doesn't go beyond left edge
     if (newX < padding) {
       newX = padding;
       needsAdjustment = true;
     }
-    
+
     // Ensure menu doesn't go beyond right edge
     if (newX + rect.width > viewportWidth - padding) {
       newX = viewportWidth - rect.width - padding;
@@ -292,7 +314,7 @@ const ChatContainer = ({ onClose, user, message }) => {
     // Vertical adjustment
     const spaceBelow = viewportHeight - newY;
     const spaceAbove = newY;
-    
+
     if (spaceBelow < rect.height + padding) {
       // Not enough space below, try above
       if (spaceAbove >= rect.height + padding) {
@@ -300,17 +322,20 @@ const ChatContainer = ({ onClose, user, message }) => {
         newY = newY - rect.height;
       } else {
         // Not enough space above or below, position at best available spot
-        newY = Math.max(padding, Math.min(newY, viewportHeight - rect.height - padding));
+        newY = Math.max(
+          padding,
+          Math.min(newY, viewportHeight - rect.height - padding),
+        );
       }
       needsAdjustment = true;
     }
-    
+
     // Ensure menu doesn't go beyond top edge
     if (newY < padding) {
       newY = padding;
       needsAdjustment = true;
     }
-    
+
     // Ensure menu doesn't go beyond bottom edge
     if (newY + rect.height > viewportHeight - padding) {
       newY = viewportHeight - rect.height - padding;
@@ -326,16 +351,16 @@ const ChatContainer = ({ onClose, user, message }) => {
           menuElement.style.left = `${newX}px`;
           menuElement.style.top = `${newY}px`;
         }
-        
+
         // Mark as adjusted in state
-        setContextMenu(prev => ({
+        setContextMenu((prev) => ({
           ...prev,
           x: newX,
           y: newY,
           positionLocked: true,
         }));
       });
-      
+
       return () => cancelAnimationFrame(rafId);
     }
   }, [contextMenu?.message?._id, contextMenu?.positionLocked]); // Only depend on message ID and lock status
@@ -661,6 +686,25 @@ const ChatContainer = ({ onClose, user, message }) => {
             </div>
           ) : (
             <>
+              {/* Load More Messages Indicator */}
+              {hasMoreMessages && (
+                <div className="text-center py-2 mb-4">
+                  {isLoadingMore ? (
+                    <div className="flex items-center justify-center gap-2 text-primary">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Loading older messages...</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => loadMoreMessages(selectedUser._id)}
+                      className="text-primary hover:underline text-sm font-medium px-4 py-2 rounded-lg hover:bg-base-200 transition-colors"
+                    >
+                      Load More Messages
+                    </button>
+                  )}
+                </div>
+              )}
+
               {messages.map((message) => {
                 const isOwnMessage = message.senderId._id === authUser._id;
 
@@ -725,6 +769,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                             <img
                               src={message.image}
                               alt="Attachment"
+                              loading="lazy"
                               className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
                               onClick={() => handleImageClick(message)}
                             />
@@ -1018,21 +1063,33 @@ const ChatContainer = ({ onClose, user, message }) => {
                 </div>
               )}
 
-              {/* Scroll to bottom button */}
-              {showScrollButton && (
-                <button
-                  onClick={() => scrollToBottom("smooth")}
-                  className="fixed right-6 bottom-24 z-50 btn btn-circle btn-primary shadow-lg hover:shadow-xl transition-all"
-                  title="Scroll to bottom"
-                >
-                  <ArrowDown size={20} />
-                </button>
-              )}
-
               <div ref={messageEndRef} />
             </>
           )}
         </div>
+
+        {/* Scroll to bottom button - WhatsApp style - MOVED OUTSIDE MESSAGES DIV */}
+        {/* {showScrollButton && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log("🔽 Scroll button clicked");
+
+              // Hide button immediately for better UX
+              setShowScrollButton(false);
+
+              // Scroll to bottom
+              scrollToBottom("smooth");
+            }}
+            className="w-12 h-12 fixed right-4 sm:right-6 bottom-24 sm:bottom-28 z-50 bg-white/90 backdrop-blur-sm shadow-md shadow-black/20 flex items-center justify-center transition-all duration-200 ease-out border border-gray-200 active:scale-95 animate-[scrollButtonFadeIn_0.15s_ease-out] cursor-pointer"
+            rounded-full
+            title="Scroll to bottom"
+            aria-label="Scroll to bottom"
+          >
+            <ArrowDown size={22} className="text-gray-800" />
+          </button>
+        )} */}
 
         <MessagesInput
           editingMessage={editingMessage}
@@ -1053,7 +1110,7 @@ const ChatContainer = ({ onClose, user, message }) => {
             style={{
               top: `${contextMenu.y}px`,
               left: `${contextMenu.x}px`,
-              willChange: 'transform',
+              willChange: "transform",
             }}
           >
             <button

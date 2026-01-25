@@ -20,14 +20,13 @@ const PORT = process.env.PORT || 5002;
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
-  process.env.FRONTEND_URL, // Your production frontend URL
+  process.env.FRONTEND_URL,
 ].filter(Boolean);
 
 // CORS configuration
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
       if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
@@ -42,13 +41,33 @@ app.use(
   })
 );
 
-// Socket.IO configuration
+// Socket.IO configuration with optimization
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
-  }
+  },
+  // Performance optimizations
+  transports: ["websocket", "polling"],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  // Enable compression for better performance
+  perMessageDeflate: {
+    threshold: 1024, // Compress messages larger than 1KB
+  },
+  // Enable HTTP compression
+  httpCompression: {
+    threshold: 1024,
+  },
+  // Connection state recovery (reconnect seamlessly)
+  connectionStateRecovery: {
+    maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
+    skipMiddlewares: true,
+  },
+  // Optimize for real-time performance
+  maxHttpBufferSize: 1e8, // 100 MB
 });
 
 // Store for tracking online users and their socket IDs
@@ -61,7 +80,12 @@ app.use(cookieParser());
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok", message: "Server is running" });
+  res.status(200).json({ 
+    status: "ok", 
+    message: "Server is running",
+    onlineUsers: Object.keys(userSocketMap).length,
+    uptime: process.uptime()
+  });
 });
 
 app.use("/api/auth", authRoutes);
@@ -69,12 +93,12 @@ app.use("/api/messages", messageRoutes);
 
 // Socket.IO connection handling with improved real-time messaging
 io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
+  console.log('✅ User connected:', socket.id);
   
   const userId = socket.handshake.query.userId;
   if (userId && userId !== 'undefined') {
     userSocketMap[userId] = socket.id;
-    console.log(`User ${userId} connected with socket ${socket.id}`);
+    console.log(`👤 User ${userId} connected with socket ${socket.id}`);
     
     // Update user's lastSeen to current time (online)
     User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch(err => 
@@ -85,12 +109,12 @@ io.on('connection', (socket) => {
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
   }
 
-  // Handle typing indicator with immediate emission
+  // Handle typing indicator with immediate emission and debouncing on client
   socket.on('typing', ({ receiverId, isTyping }) => {
     const receiverSocketId = userSocketMap[receiverId];
     if (receiverSocketId) {
-      // Send immediately, no buffering
-      io.to(receiverSocketId).emit('userTyping', {
+      // Send immediately with volatile flag for non-critical data
+      io.to(receiverSocketId).volatile.emit('userTyping', {
         senderId: userId,
         isTyping,
       });
@@ -132,7 +156,7 @@ io.on('connection', (socket) => {
 
   // Handle disconnection
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+    console.log('❌ User disconnected:', socket.id);
     if (userId && userId !== 'undefined') {
       delete userSocketMap[userId];
       
@@ -144,6 +168,11 @@ io.on('connection', (socket) => {
       // Emit updated online users list
       io.emit("getOnlineUsers", Object.keys(userSocketMap));
     }
+  });
+
+  // Error handling for socket
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
   });
 });
 
@@ -158,7 +187,8 @@ app.use((err, req, res, next) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔌 Socket.IO ready for real-time connections`);
   connectDB();
 });

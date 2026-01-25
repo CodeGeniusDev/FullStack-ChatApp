@@ -20,18 +20,20 @@ const App = () => {
   const { authUser, checkAuth, isCheckingAuth, onlineUsers } = useAuthStore();
   const { initNotifications } = useChatStore();
   const { theme } = useThemeStore();
-  
+
   // Track render count to detect infinite loops
   const renderCount = useRef(0);
   const lastRenderTime = useRef(Date.now());
-  
+
   renderCount.current += 1;
   const now = Date.now();
   const timeSinceLastRender = now - lastRenderTime.current;
   lastRenderTime.current = now;
-  
-  console.log(`🔄 App render #${renderCount.current} (${timeSinceLastRender}ms since last render)`);
-  
+
+  console.log(
+    `🔄 App render #${renderCount.current} (${timeSinceLastRender}ms since last render)`,
+  );
+
   // Detect infinite render loop
   // if (renderCount.current > 100) {
   //   console.error("🚨 INFINITE RENDER LOOP DETECTED! Stopping execution.");
@@ -46,7 +48,7 @@ const App = () => {
 
   // CRITICAL FIX: Use a ref to track if checkAuth has been called
   const hasCheckedAuth = useRef(false);
-  
+
   useEffect(() => {
     // Only run checkAuth ONCE
     if (!hasCheckedAuth.current) {
@@ -61,7 +63,7 @@ const App = () => {
   // Initialize notifications when user is authenticated - run only once per auth change
   const hasInitNotifications = useRef(false);
   const lastAuthUserId = useRef(null);
-  
+
   useEffect(() => {
     if (authUser && authUser._id !== lastAuthUserId.current) {
       if (!hasInitNotifications.current) {
@@ -81,7 +83,31 @@ const App = () => {
 
   if (isCheckingAuth && !authUser)
     return (
-      <div className="flex items-center justify-center h-screen bg-transparent">
+      // <div className="flex items-center justify-center h-screen bg-transparent">
+      // </div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-base-100 p-4">
+        <div className="relative">
+          {/* Pulsing circle animation */}
+          <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-primary animate-ping opacity-75"></div>
+          </div>
+
+          {/* Optional: App logo can be placed here */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-2xl font-bold text-primary">
+              <img src="/favicon.ico" alt="" />
+            </span>
+          </div>
+        </div>
+
+        <p className="mt-4 text-base-content/70">
+          Loading your chat experience...
+        </p>
+
+        {/* Optional: Progress bar */}
+        <div className="w-48 h-1.5 bg-base-300 rounded-full overflow-hidden mt-6">
+          <div className="h-full bg-primary rounded-full animate-pulse"></div>
+        </div>
       </div>
     );
 
@@ -110,7 +136,7 @@ const App = () => {
       </Routes>
 
       <Toaster />
-      
+
       {/* PWA Install Prompt */}
       {authUser && <PWAInstallPrompt />}
     </div>

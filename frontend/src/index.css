@@ -13,6 +13,29 @@
   }
 }
 
+/* Scroll button fade-in/out animation - WhatsApp style */
+@keyframes scrollButtonFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes scrollButtonFadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
 /* Optimized transitions - only for interactive elements */
 button, a, input, select, textarea {
   transition: background-color 0.2s ease, color 0.2s ease,

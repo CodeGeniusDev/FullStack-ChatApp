@@ -33,7 +33,6 @@ export const useAuthStore = create((set, get) => ({
         authUser: null,
         isCheckingAuth: false,
       });
-      // Clear any invalid tokens
       document.cookie =
         "token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
     }
@@ -103,7 +102,7 @@ export const useAuthStore = create((set, get) => ({
     const { authUser, socket } = get();
     if (!authUser || socket?.connected) return;
 
-    console.log("Connecting to socket server:", BASE_URL);
+    console.log("🔌 Connecting to socket server:", BASE_URL);
 
     const newSocket = io(BASE_URL, {
       query: {
@@ -111,26 +110,45 @@ export const useAuthStore = create((set, get) => ({
       },
       transports: ["websocket", "polling"],
       withCredentials: true,
+      // Reconnection settings
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: Infinity,
+      // Timeout settings
+      timeout: 20000,
+      // Enable compression
+      perMessageDeflate: true,
     });
 
     newSocket.on("connect", () => {
-      console.log("Socket connected:", newSocket.id);
+      console.log("✅ Socket connected:", newSocket.id);
       set({ socket: newSocket });
     });
 
     newSocket.on("connect_error", (error) => {
-      console.error("Socket connection error:", error);
+      console.error("❌ Socket connection error:", error);
+    });
+
+    newSocket.on("reconnect", (attemptNumber) => {
+      console.log("🔄 Socket reconnected after", attemptNumber, "attempts");
+    });
+
+    newSocket.on("reconnect_error", (error) => {
+      console.error("❌ Socket reconnection error:", error);
     });
 
     newSocket.on("getOnlineUsers", (userIds) => {
       set({ onlineUsers: userIds });
     });
+
+    set({ socket: newSocket });
   },
 
   disconnectSocket: () => {
     const { socket } = get();
     if (socket?.connected) {
-      console.log("Disconnecting socket");
+      console.log("🔌 Disconnecting socket");
       socket.disconnect();
       set({ socket: null });
     }

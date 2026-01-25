@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
-  MessageSquare,
   Settings,
   User,
   LogOut,
@@ -74,8 +73,9 @@ const Navbar = () => {
               to="/"
               className="flex items-center gap-2.5 hover:opacity-80 transition-all"
             >
-              <div className="size-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
-                <MessageSquare className="w-5 h-5 text-primary" />
+              <div className="size-9 rounded-full bg-primary/10 border border-white/30 flex items-center justify-center">
+                {/* <MessageSquare className="w-5 h-5 text-primary" /> */}
+                <img src="/favicon.ico" alt="" />
               </div>
               <h1 className="text-lg hidden sm:block font-bold tracking-wider transition-all">
                 ChatGeniusX

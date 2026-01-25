@@ -268,9 +268,9 @@ const ProfilePage = () => {
               <div className="flex items-center justify-between py-2">
                 <span>Account Status</span>
                 <span
-                  className={`${isOnline ? "text-green-500 bg-green-500/10 border-green-500" : "text-gray-500 bg-gray-500/10 border-gray-500"} border px-2 py-1 rounded-full text-xs`}
+                  className={`${isOnline ? "text-green-500 bg-green-500/10 border-green-500" : "text-green-500 bg-green-500/10 border-green-500"} border px-2 py-1 rounded-full text-xs`}
                 >
-                  {isOnline ? "Active" : "Offline"}
+                  {isOnline ? "Active" : "Active"}
                 </span>
               </div>
             </div>
