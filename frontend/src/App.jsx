@@ -95,7 +95,7 @@ const App = () => {
           {/* Optional: App logo can be placed here */}
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-2xl font-bold text-primary">
-              <img src="/favicon.ico" alt="" />
+              <img loading="eager" src="/favicon.ico" alt="logo" />
             </span>
           </div>
         </div>
