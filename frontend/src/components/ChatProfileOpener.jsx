@@ -148,16 +148,38 @@ const ChatProfileOpener = ({
     const docs = [];
 
     messages.forEach((msg) => {
+      // Handle image messages
       if (msg.image) {
-        // Check if it's a video or image
         const extension = msg.image.split(".").pop().toLowerCase();
+        const mediaUrl =
+          msg.image.startsWith("http") || msg.image.startsWith("/")
+            ? msg.image
+            : `/${msg.image}`;
+
         if (["mp4", "webm", "ogg", "mov"].includes(extension)) {
-          videos.push({ ...msg, url: msg.image });
+          videos.push({ ...msg, url: mediaUrl });
         } else {
-          images.push({ ...msg, url: msg.image });
+          images.push({ ...msg, url: mediaUrl });
         }
       }
-      // You can add document detection here if needed
+
+      // Handle video messages
+      if (msg.video) {
+        const videoUrl =
+          msg.video.startsWith("http") || msg.video.startsWith("/")
+            ? msg.video
+            : `/${msg.video}`;
+        videos.push({ ...msg, url: videoUrl });
+      }
+
+      // Handle documents if needed
+      if (msg.document) {
+        const docUrl =
+          msg.document.startsWith("http") || msg.document.startsWith("/")
+            ? msg.document
+            : `/${msg.document}`;
+        docs.push({ ...msg, url: docUrl });
+      }
     });
 
     setMediaFiles({ images, videos, docs });
@@ -232,10 +254,10 @@ const ChatProfileOpener = ({
   return (
     <>
       {imageModal && (
-        <ImageModel 
-          message={imageModal} 
-          onClose={closeImageModal} 
-          user={user} 
+        <ImageModel
+          message={imageModal}
+          onClose={closeImageModal}
+          user={user}
           allMessages={messages}
         />
       )}
@@ -582,12 +604,12 @@ const ChatProfileOpener = ({
                                 {/* Play button overlay */}
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
                                   <div className="w-12 h-12 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-colors">
-                                    <svg 
-                                      className="w-6 h-6 text-gray-800 ml-0.5" 
-                                      fill="currentColor" 
+                                    <svg
+                                      className="w-6 h-6 text-gray-800 ml-0.5"
+                                      fill="currentColor"
                                       viewBox="0 0 16 16"
                                     >
-                                      <path d="M5 3.5v9l7-4.5-7-4.5z"/>
+                                      <path d="M5 3.5v9l7-4.5-7-4.5z" />
                                     </svg>
                                   </div>
                                 </div>

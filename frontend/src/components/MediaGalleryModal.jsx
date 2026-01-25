@@ -47,8 +47,8 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
   const currentIndex = mediaMessages.findIndex(
     (msg) =>
       msg._id === message?._id ||
-      msg.image === message?.image ||
-      msg.video === message?.video ||
+      (message?.image && msg.image === message?.image) ||
+      (message?.video && msg.video === message?.video) ||
       msg === message,
   );
 
@@ -58,10 +58,7 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
   );
 
   // Always use the message prop if it exists and has media, otherwise use the indexed message
-  const currentMessage =
-    message?.image || message?.video
-      ? message
-      : mediaMessages[activeIndex] || message;
+  const currentMessage = mediaMessages[activeIndex] || message;
 
   // Determine if we're in profile view or chat media view
   const isProfileView = !message?.image && !message?.video && user?.profilePic;
@@ -79,6 +76,10 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
     // For chat media view
     isVideo = !!currentMessage?.video;
     mediaSrc = currentMessage?.video || currentMessage?.image || "/avatar.png";
+    // Ensure the media path is absolute
+    if (mediaSrc && !mediaSrc.startsWith('http') && !mediaSrc.startsWith('/')) {
+      mediaSrc = `/${mediaSrc}`;
+    }
     mediaAlt = isVideo ? "Chat video" : "Chat image";
     mediaFrom = "chat";
   }
