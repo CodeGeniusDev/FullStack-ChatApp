@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import {
-  Settings,
-  User,
-  LogOut,
-  Download,
-  Smartphone,
-} from "lucide-react";
+import { Settings, User, LogOut, Download, Smartphone } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 
 const Navbar = () => {
@@ -75,7 +69,7 @@ const Navbar = () => {
             >
               <div className="size-9 rounded-full bg-primary/10 border border-white/30 flex items-center justify-center">
                 {/* <MessageSquare className="w-5 h-5 text-primary" /> */}
-                <img src="/favicon.ico" alt="" />
+                <img loading="eager" src="/favicon.ico" alt="logo" />
               </div>
               <h1 className="text-lg hidden sm:block font-bold tracking-wider transition-all">
                 ChatGeniusX
