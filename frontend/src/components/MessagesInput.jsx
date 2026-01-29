@@ -274,15 +274,16 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   };
 
   return (
-    <div
-      className="p-3 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/10 relative"
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      {/* Drag and Drop Overlay */}
-      {/* {isDragging && (
+    <div className="sticky bottom-0 left-0 right-0 lg:static z-10">
+      <div
+        className="p-3 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/90 lg:bg-base-100/10 relative shadow-lg lg:shadow-none"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Drag and Drop Overlay */}
+        {/* {isDragging && (
         <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg z-50 flex items-center justify-center">
           <div className="text-center">
             <Paperclip size={48} className="mx-auto mb-2 text-primary" />
@@ -292,232 +293,233 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
         </div>
       )} */}
 
-      {/* Reply preview */}
-      {replyingTo && (
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 backdrop-blur-md bg-base-200/70 p-2.5 rounded-lg border border-base-300/50">
-          <div className="overflow-hidden">
-            <p className="text-xs font-semibold truncate">
-              Replying to {replyingTo.senderId.fullName}
-            </p>
-            <p className="text-sm text-ellipsis line-clamp-2 break-words opacity-70">
-              {replyingTo.text ? (
-                <>
-                  <span className="sm:hidden">
-                    {replyingTo.text.length > 28
-                      ? `${replyingTo.text.substring(0, 28)}...`
-                      : replyingTo.text}
-                  </span>
-                  <span className="hidden sm:inline">
-                    {replyingTo.text.length > 70
-                      ? `${replyingTo.text.substring(0, 70)}...`
-                      : replyingTo.text}
-                  </span>
-                </>
-              ) : (
-                "📷 Image"
-              )}
-            </p>
-          </div>
-          <button
-            onClick={clearReplyingTo}
-            className="btn btn-ghost btn-sm btn-circle flex-shrink-0 hover:bg-base-300/50"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Edit preview */}
-      {editingMessage && (
-        <div className="mb-2 flex items-center gap-2 backdrop-blur-md bg-warning/20 p-2.5 rounded-lg border border-warning/30">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-warning font-semibold">
-              Editing message
-            </p>
-            <p className="text-sm opacity-70">
-              <span className="sm:hidden">
-                {editingMessage.text.length > 28
-                  ? `${editingMessage.text.substring(0, 28)}...`
-                  : editingMessage.text}
-              </span>
-              <span className="hidden sm:inline">
-                {editingMessage.text.length > 70
-                  ? `${editingMessage.text.substring(0, 70)}...`
-                  : editingMessage.text}
-              </span>
-            </p>
-          </div>
-          <button
-            onClick={() => {
-              setEditingMessage(null);
-              setText("");
-            }}
-            className="btn btn-ghost btn-sm btn-circle flex-shrink-0 hover:bg-warning/20"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Image preview (legacy - kept for single image) */}
-      {imagePreview && mediaPreviews.length === 0 && (
-        <div className="mb-3 flex items-center gap-2">
-          <div className="relative">
-            <img
-              src={imagePreview}
-              alt="Preview"
-              className="w-20 h-20 object-cover rounded-lg border-2 border-base-300/50"
-            />
+        {/* Reply preview */}
+        {replyingTo && (
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 backdrop-blur-md bg-base-200/70 p-2.5 rounded-lg border border-base-300/50">
+            <div className="overflow-hidden">
+              <p className="text-xs font-semibold truncate">
+                Replying to {replyingTo.senderId.fullName}
+              </p>
+              <p className="text-sm text-ellipsis line-clamp-2 break-words opacity-70">
+                {replyingTo.text ? (
+                  <>
+                    <span className="sm:hidden">
+                      {replyingTo.text.length > 28
+                        ? `${replyingTo.text.substring(0, 28)}...`
+                        : replyingTo.text}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {replyingTo.text.length > 70
+                        ? `${replyingTo.text.substring(0, 70)}...`
+                        : replyingTo.text}
+                    </span>
+                  </>
+                ) : (
+                  "📷 Image"
+                )}
+              </p>
+            </div>
             <button
-              onClick={removeImage}
-              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error text-error-content flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
-              type="button"
+              onClick={clearReplyingTo}
+              className="btn btn-ghost btn-sm btn-circle flex-shrink-0 hover:bg-base-300/50"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Multiple Media Previews */}
-      {mediaPreviews.length > 0 && (
-        <div className="mb-3">
-          <div className="flex items-center gap-2 mb-2">
-            <p className="text-sm font-medium">
-              {mediaPreviews.length} file(s) selected
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {mediaPreviews.map((media, index) => (
-              <div key={index} className="relative">
-                {media.type === "image" && (
-                  <img
-                    src={media.data}
-                    alt={media.name}
-                    className="w-20 h-20 object-cover rounded-lg border-2 border-base-300/50"
-                  />
-                )}
-                {media.type === "video" && (
-                  <div className="w-20 h-20 bg-base-300 rounded-lg border-2 border-base-300/50 flex items-center justify-center">
-                    <span className="text-2xl">🎥</span>
-                  </div>
-                )}
-                {media.type === "audio" && (
-                  <div className="w-20 h-20 bg-base-300 rounded-lg border-2 border-base-300/50 flex items-center justify-center">
-                    <span className="text-2xl">🎵</span>
-                  </div>
-                )}
-                <button
-                  onClick={() => removeMedia(index)}
-                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error text-error-content flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
-                  type="button"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-        {/* Attachment */}
-        {!editingMessage && (
-          <button
-            type="button"
-            className="btn btn-circle btn-ghost btn-sm sm:btn-md"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            title="Attach file"
-          >
-            {isUploading ? (
-              <span className="loading loading-spinner loading-sm" />
-            ) : (
-              <Paperclip size={20} />
-            )}
-          </button>
         )}
 
-        <input
-          type="file"
-          accept="image/*,video/*,audio/*"
-          className="hidden"
-          ref={fileInputRef}
-          onChange={handleImageChange}
-          disabled={isUploading}
-          multiple
-        />
-
-        {/* Input + emoji */}
-        <div className="flex-1 backdrop-blur-lg bg-base-200/50 rounded-xl border border-base-300/50 flex items-end overflow-hidden">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            className="flex-1 bg-transparent px-4 py-2.5 resize-none outline-none text-sm sm:text-base placeholder:text-base-content/50 max-h-32 overflow-y-auto"
-            placeholder="Type a message..."
-            value={text}
-            onChange={(e) => handleTyping(e.target.value)}
-            onKeyPress={handleKeyPress}
-            onInput={(e) => {
-              e.target.style.height = "auto";
-              e.target.style.height =
-                Math.min(e.target.scrollHeight, 128) + "px";
-            }}
-          />
-        </div>
-
-        <div className="relative">
-          <button
-            type="button"
-            data-testid="emoji-button"
-            className="btn btn-ghost btn-sm btn-circle text-gray-400 hover:text-gray-600 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowEmojiPicker(!showEmojiPicker);
-            }}
-          >
-            <Smile size={20} />
-          </button>
-
-          {showEmojiPicker && (
-            <div className="absolute bottom-full right-0 mb-2 z-[100]">
-              <EmojiPicker
-                onEmojiClick={handleEmojiClick}
-                theme="dark"
-                width={280}
-                height={400}
-                searchDisabled
-                // skinTonesDisabled
-                // previewConfig={{ showPreview: true }}
-              />
+        {/* Edit preview */}
+        {editingMessage && (
+          <div className="mb-2 flex items-center gap-2 backdrop-blur-md bg-warning/20 p-2.5 rounded-lg border border-warning/30">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-warning font-semibold">
+                Editing message
+              </p>
+              <p className="text-sm opacity-70">
+                <span className="sm:hidden">
+                  {editingMessage.text.length > 28
+                    ? `${editingMessage.text.substring(0, 28)}...`
+                    : editingMessage.text}
+                </span>
+                <span className="hidden sm:inline">
+                  {editingMessage.text.length > 70
+                    ? `${editingMessage.text.substring(0, 70)}...`
+                    : editingMessage.text}
+                </span>
+              </p>
             </div>
-          )}
-        </div>
-        {/* Emoji button moved outside */}
-
-        {/* Send / Mic */}
-        {text.trim() || imagePreview || mediaPreviews.length > 0 ? (
-          <button
-            type="submit"
-            className="btn btn-circle btn-primary btn-md shadow-lg hover:shadow-xl transition-all hover:scale-105"
-            disabled={
-              (!text.trim() && !imagePreview && mediaPreviews.length === 0) ||
-              isUploading
-            }
-            title="Send message"
-          >
-            <Send size={20} className="ml-0.5" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn btn-circle btn-ghost btn-md hover:bg-base-200/50 text-base-content/70 hover:text-base-content"
-            title="Voice message"
-          >
-            <Mic size={20} />
-          </button>
+            <button
+              onClick={() => {
+                setEditingMessage(null);
+                setText("");
+              }}
+              className="btn btn-ghost btn-sm btn-circle flex-shrink-0 hover:bg-warning/20"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         )}
-      </form>
+
+        {/* Image preview (legacy - kept for single image) */}
+        {imagePreview && mediaPreviews.length === 0 && (
+          <div className="mb-3 flex items-center gap-2">
+            <div className="relative">
+              <img
+                src={imagePreview}
+                alt="Preview"
+                className="w-20 h-20 object-cover rounded-lg border-2 border-base-300/50"
+              />
+              <button
+                onClick={removeImage}
+                className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error text-error-content flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                type="button"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Multiple Media Previews */}
+        {mediaPreviews.length > 0 && (
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-sm font-medium">
+                {mediaPreviews.length} file(s) selected
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {mediaPreviews.map((media, index) => (
+                <div key={index} className="relative">
+                  {media.type === "image" && (
+                    <img
+                      src={media.data}
+                      alt={media.name}
+                      className="w-20 h-20 object-cover rounded-lg border-2 border-base-300/50"
+                    />
+                  )}
+                  {media.type === "video" && (
+                    <div className="w-20 h-20 bg-base-300 rounded-lg border-2 border-base-300/50 flex items-center justify-center">
+                      <span className="text-2xl">🎥</span>
+                    </div>
+                  )}
+                  {media.type === "audio" && (
+                    <div className="w-20 h-20 bg-base-300 rounded-lg border-2 border-base-300/50 flex items-center justify-center">
+                      <span className="text-2xl">🎵</span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeMedia(index)}
+                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error text-error-content flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                    type="button"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+          {/* Attachment */}
+          {!editingMessage && (
+            <button
+              type="button"
+              className="btn btn-circle btn-ghost btn-sm sm:btn-md"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              title="Attach file"
+            >
+              {isUploading ? (
+                <span className="loading loading-spinner loading-sm" />
+              ) : (
+                <Paperclip size={20} />
+              )}
+            </button>
+          )}
+
+          <input
+            type="file"
+            accept="image/*,video/*,audio/*"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleImageChange}
+            disabled={isUploading}
+            multiple
+          />
+
+          {/* Input + emoji */}
+          <div className="flex-1 backdrop-blur-lg bg-base-200/50 rounded-xl border border-base-300/50 flex items-end overflow-hidden">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              className="flex-1 bg-transparent px-4 py-2.5 resize-none outline-none text-sm sm:text-base placeholder:text-base-content/50 max-h-32 overflow-y-auto"
+              placeholder="Type a message..."
+              value={text}
+              onChange={(e) => handleTyping(e.target.value)}
+              onKeyPress={handleKeyPress}
+              onInput={(e) => {
+                e.target.style.height = "auto";
+                e.target.style.height =
+                  Math.min(e.target.scrollHeight, 128) + "px";
+              }}
+            />
+          </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              data-testid="emoji-button"
+              className="btn btn-ghost btn-sm btn-circle text-gray-400 hover:text-gray-600 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowEmojiPicker(!showEmojiPicker);
+              }}
+            >
+              <Smile size={20} />
+            </button>
+
+            {showEmojiPicker && (
+              <div className="absolute bottom-full right-0 mb-2 z-[100]">
+                <EmojiPicker
+                  onEmojiClick={handleEmojiClick}
+                  theme="dark"
+                  width={280}
+                  height={400}
+                  searchDisabled
+                  // skinTonesDisabled
+                  // previewConfig={{ showPreview: true }}
+                />
+              </div>
+            )}
+          </div>
+          {/* Emoji button moved outside */}
+
+          {/* Send / Mic */}
+          {text.trim() || imagePreview || mediaPreviews.length > 0 ? (
+            <button
+              type="submit"
+              className="btn btn-circle btn-primary btn-md shadow-lg hover:shadow-xl transition-all hover:scale-105"
+              disabled={
+                (!text.trim() && !imagePreview && mediaPreviews.length === 0) ||
+                isUploading
+              }
+              title="Send message"
+            >
+              <Send size={20} className="ml-0.5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-circle btn-ghost btn-md hover:bg-base-200/50 text-base-content/70 hover:text-base-content"
+              title="Voice message"
+            >
+              <Mic size={20} />
+            </button>
+          )}
+        </form>
+      </div>
     </div>
   );
 };

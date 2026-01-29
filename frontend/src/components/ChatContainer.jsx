@@ -639,15 +639,15 @@ const ChatContainer = ({ onClose, user, message }) => {
   const reactionEmojisSet2 = ["😊", "😍", "🔥", "🎉", "👏", "🤔"];
   const [activeEmojiSet, setActiveEmojiSet] = useState(reactionEmojisSet1);
 
-  if (isMessagesLoading) {
-    return (
-      <div className="flex-1 flex flex-col overflow-auto">
-        <ChatHeader />
-        <MessageSkeleton />
-        <MessagesInput />
-      </div>
-    );
-  }
+  // if (isMessagesLoading) {
+  //   return (
+  //     <div className="flex-1 flex flex-col overflow-auto">
+  //       <ChatHeader />
+  //       <MessageSkeleton />
+  //       <MessagesInput />
+  //     </div>
+  //   );
+  // }
 
   return (
     <>
@@ -697,7 +697,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                   ) : (
                     <button
                       onClick={() => loadMoreMessages(selectedUser._id)}
-                      className="text-primary hover:underline text-sm font-medium px-4 py-2 rounded-lg hover:bg-base-200 transition-colors"
+                      className="text-primary hover:underline text-sm font-medium px-4 py-2 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
                     >
                       Load More Messages
                     </button>
@@ -724,7 +724,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                     onTouchMove={handleTouchMove}
                   >
                     {!isOwnMessage && (
-                      <div className="chat-image avatar">
+                      <div className="chat-image avatar hidden md:block">
                         <div
                           className="size-10 rounded-full cursor-pointer"
                           tabIndex={0}
@@ -741,7 +741,7 @@ const ChatContainer = ({ onClose, user, message }) => {
 
                     <div className="">
                       <div className="relative group">
-                        <div className="chat-bubble backdrop-blur-lg bg-base-300/50 flex flex-col max-w-[20rem] sm:max-w-lg">
+                        <div className="chat-bubble backdrop-blur-lg bg-base-300/50 md:ml-0 ml-4 flex flex-col max-w-70 sm:max-w-lg">
                           {message.replyTo && (
                             <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
                               <p className="font-semibold text-xs">
@@ -770,14 +770,14 @@ const ChatContainer = ({ onClose, user, message }) => {
                               src={message.image}
                               alt="Attachment"
                               loading="lazy"
-                              className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                              className="sm:w-[200px] sm:max-h-[300px] max-h-[400px] object-cover rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
                               onClick={() => handleImageClick(message)}
                             />
                           )}
 
                           {message.video && (
                             <div
-                              className="relative sm:max-w-[300px] rounded-md mb-2 overflow-hidden cursor-pointer group"
+                              className="relative sm:max-w-[300px] max-h-[400px] rounded-md mb-2 overflow-hidden cursor-pointer group"
                               onClick={() => handleVideoClick(message)}
                             >
                               <video
