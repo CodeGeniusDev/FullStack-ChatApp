@@ -54,7 +54,7 @@ const SettingsPage = () => {
 
         {/* Preview Section */}
         <h3 className="text-lg font-semibold mb-3">Preview</h3>
-        <div className="w-full max-w-md mx-auto bg-base-100 rounded-lg overflow-hidden shadow-sm">
+        <div className="w-full max-w-md mx-auto bg-base-100 rounded-box overflow-hidden shadow-sm">
           {/* Chat Header */}
           <div className="bg-base-200 px-4 py-3 border-b border-base-300 flex items-center">
             <div className="w-10 h-10 rounded-full bg-base-300 flex-shrink-0 mr-3 flex items-center justify-center">
