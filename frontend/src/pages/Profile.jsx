@@ -1,17 +1,23 @@
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
-import { Camera, Mail, User, MessageSquare, Save, X } from "lucide-react";
+import {
+  Camera,
+  Mail,
+  User,
+  MessageSquare,
+  Save,
+  X,
+  LogOut,
+} from "lucide-react";
 import toast from "react-hot-toast";
 
 const ProfilePage = () => {
-  const { authUser, isUpdatingProfile, updateProfile, onlineUsers } =
+  const { authUser, isUpdatingProfile, updateProfile, onlineUsers, logOut } =
     useAuthStore();
   const { selectedUser } = useChatStore();
   const user = selectedUser || authUser;
   const isOnline = onlineUsers.includes(user?._id);
-  console.log("authUser:", authUser);
-  console.log("createdAt:", authUser?.createdAt);
   // const { updateBio,  }
   const [selectedImg, setSelectedImg] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -272,6 +278,17 @@ const ProfilePage = () => {
                 >
                   {isOnline ? "Active" : "Active"}
                 </span>
+              </div>
+
+              {/* Logout */}
+              <div className="pt-4 border-t border-base-300">
+                <button
+                  onClick={logOut}
+                  className="w-full flex items-center justify-center gap-2 bg-error hover:bg-error/90 text-error-content py-3 rounded-lg transition-all duration-200 cursor-pointer active:scale-95"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span>Logout</span>
+                </button>
               </div>
             </div>
           </div>
