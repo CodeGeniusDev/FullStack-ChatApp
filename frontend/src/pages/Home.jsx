@@ -11,16 +11,16 @@ const HomePage = () => {
   return (
     <div className="relative h-screen overflow-hidden">
       {/* Background */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-10"
+      {/* <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.1]"
         style={{
           backgroundImage: "url('/bg.png')",
         }}
-      />
+      /> */}
 
       {/* Main Container */}
       <div className="flex items-center justify-center lg:pt-20 pt-15 px-0 lg:px-4 z-20 border-t-2 border-base-300">
-        <div className="bg-base-100/90 rounded-none lg:rounded-box shadow-cl w-full h-[calc(100vh-3.8rem)] lg:h-[calc(100vh-6rem)] z-20 border-0 lg:border-2 border-base-300">
+        <div className="bg-base-100 rounded-none lg:rounded-box shadow-cl w-full h-[calc(100vh-3.8rem)] lg:h-[calc(100vh-6rem)] border-0 lg:border-2 border-base-300">
           <div className="flex h-full rounded-none lg:rounded-box overflow-hidden">
             {/* Sidebar - Hidden on mobile when chat is selected */}
             <div
