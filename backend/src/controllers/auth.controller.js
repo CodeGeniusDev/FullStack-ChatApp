@@ -175,11 +175,115 @@ export const checkAuth = (req, res) => {
       profilePic: user.profilePic,
       bio: user.bio,
       createdAt: user.createdAt,
+      pinnedContacts: user.pinnedContacts || [],
+      mutedChats: user.mutedChats || [],
       // Add other non-sensitive fields as needed
     };
     res.status(200).json(userData);
   } catch (error) {
     console.log("Error in checkAuth controller", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// Toggle pin contact
+export const togglePinContact = async (req, res) => {
+  try {
+    const { contactId } = req.body;
+    const userId = req.user._id;
+
+    if (!contactId) {
+      return res.status(400).json({ message: "Contact ID is required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isPinned = user.pinnedContacts.includes(contactId);
+
+    if (isPinned) {
+      // Unpin
+      user.pinnedContacts = user.pinnedContacts.filter(
+        (id) => id !== contactId
+      );
+    } else {
+      // Pin
+      user.pinnedContacts.push(contactId);
+    }
+
+    await user.save();
+
+    // Emit socket event to sync across devices
+    const io = req.app.get("io");
+    const userSocketMap = req.app.get("userSocketMap");
+    
+    // Get all socket connections for this user
+    Object.entries(userSocketMap).forEach(([uid, socketId]) => {
+      if (uid === userId.toString()) {
+        io.to(socketId).emit("pinnedContactsUpdated", {
+          pinnedContacts: user.pinnedContacts,
+        });
+      }
+    });
+
+    res.status(200).json({
+      pinnedContacts: user.pinnedContacts,
+      message: isPinned ? "Contact unpinned" : "Contact pinned",
+    });
+  } catch (error) {
+    console.error("Error in togglePinContact:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// Toggle mute chat
+export const toggleMuteChat = async (req, res) => {
+  try {
+    const { chatId } = req.body;
+    const userId = req.user._id;
+
+    if (!chatId) {
+      return res.status(400).json({ message: "Chat ID is required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const isMuted = user.mutedChats.includes(chatId);
+
+    if (isMuted) {
+      // Unmute
+      user.mutedChats = user.mutedChats.filter((id) => id !== chatId);
+    } else {
+      // Mute
+      user.mutedChats.push(chatId);
+    }
+
+    await user.save();
+
+    // Emit socket event to sync across devices
+    const io = req.app.get("io");
+    const userSocketMap = req.app.get("userSocketMap");
+    
+    // Get all socket connections for this user
+    Object.entries(userSocketMap).forEach(([uid, socketId]) => {
+      if (uid === userId.toString()) {
+        io.to(socketId).emit("mutedChatsUpdated", {
+          mutedChats: user.mutedChats,
+        });
+      }
+    });
+
+    res.status(200).json({
+      mutedChats: user.mutedChats,
+      message: isMuted ? "Chat unmuted" : "Chat muted",
+    });
+  } catch (error) {
+    console.error("Error in toggleMuteChat:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };

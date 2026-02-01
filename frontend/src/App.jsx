@@ -1,5 +1,6 @@
 import Navbar from "./components/Navbar";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 import Home from "./pages/Home";
 import SignUp from "./pages/Signup";
@@ -112,34 +113,36 @@ const App = () => {
     );
 
   return (
-    <div data-theme={theme}>
-      <Navbar />
+    <ErrorBoundary>
+      <div data-theme={theme}>
+        <Navbar />
 
-      <Routes>
-        <Route
-          path="/"
-          element={authUser ? <Home /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="/signup"
-          element={!authUser ? <SignUp /> : <Navigate to="/" />}
-        />
-        <Route
-          path="/login"
-          element={!authUser ? <Login /> : <Navigate to="/" />}
-        />
-        <Route path="/settings" element={<Setting />} />
-        <Route
-          path="/profile"
-          element={authUser ? <Profile /> : <Navigate to="/login" />}
-        />
-      </Routes>
+        <Routes>
+          <Route
+            path="/"
+            element={authUser ? <Home /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/signup"
+            element={!authUser ? <SignUp /> : <Navigate to="/" />}
+          />
+          <Route
+            path="/login"
+            element={!authUser ? <Login /> : <Navigate to="/" />}
+          />
+          <Route path="/settings" element={<Setting />} />
+          <Route
+            path="/profile"
+            element={authUser ? <Profile /> : <Navigate to="/login" />}
+          />
+        </Routes>
 
-      <Toaster />
+        <Toaster />
 
-      {/* PWA Install Prompt */}
-      {authUser && <PWAInstallPrompt />}
-    </div>
+        {/* PWA Install Prompt */}
+        {authUser && <PWAInstallPrompt />}
+      </div>
+    </ErrorBoundary>
   );
 };
 export default App;

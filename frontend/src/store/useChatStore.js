@@ -83,9 +83,11 @@ export const useChatStore = create((set, get) => ({
       if (!userId) {
         throw new Error("No user ID provided");
       }
-      const res = await axiosInstance.get(`/messages/user/${userId}?page=1&limit=50`);
-      
-      set({ 
+      const res = await axiosInstance.get(
+        `/messages/user/${userId}?page=1&limit=50`,
+      );
+
+      set({
         messages: res.data.messages || [],
         hasMoreMessages: res.data.pagination?.hasMore || false,
         currentPage: 1,
@@ -105,18 +107,18 @@ export const useChatStore = create((set, get) => ({
   // Load more messages (pagination)
   loadMoreMessages: async (userId) => {
     const { currentPage, hasMoreMessages, isLoadingMore } = get();
-    
+
     if (!hasMoreMessages || isLoadingMore) return;
-    
+
     set({ isLoadingMore: true });
     try {
       const nextPage = currentPage + 1;
       const res = await axiosInstance.get(
-        `/messages/user/${userId}?page=${nextPage}&limit=50`
+        `/messages/user/${userId}?page=${nextPage}&limit=50`,
       );
-      
+
       const olderMessages = res.data.messages || [];
-      
+
       set((state) => ({
         messages: [...olderMessages, ...state.messages],
         currentPage: nextPage,
@@ -177,22 +179,27 @@ export const useChatStore = create((set, get) => ({
     });
 
     try {
-      if (!messageData.text && !messageData.image && !messageData.video && !messageData.audio) {
+      if (
+        !messageData.text &&
+        !messageData.image &&
+        !messageData.video &&
+        !messageData.audio
+      ) {
         throw new Error("Message must contain text or media");
       }
-      
+
       const res = await axiosInstance.post(
         `/messages/send/${selectedUser._id}`,
         {
           ...messageData,
           replyTo: replyingTo?._id || null,
-        }
+        },
       );
 
       // Replace optimistic message with real one
       set({
         messages: get().messages.map((msg) =>
-          msg._id === optimisticMessage._id ? res.data : msg
+          msg._id === optimisticMessage._id ? res.data : msg,
         ),
       });
 
@@ -211,7 +218,7 @@ export const useChatStore = create((set, get) => ({
       // Remove optimistic message on error
       set({
         messages: get().messages.filter(
-          (msg) => msg._id !== optimisticMessage._id
+          (msg) => msg._id !== optimisticMessage._id,
         ),
       });
 
@@ -256,7 +263,7 @@ export const useChatStore = create((set, get) => ({
       toast.success(
         deleteForEveryone
           ? "Message deleted for everyone"
-          : "Message deleted for you"
+          : "Message deleted for you",
       );
 
       // Refresh user list only for deletions
@@ -275,7 +282,7 @@ export const useChatStore = create((set, get) => ({
 
       set({
         messages: get().messages.map((msg) =>
-          msg._id === messageId ? res.data : msg
+          msg._id === messageId ? res.data : msg,
         ),
       });
 
@@ -308,15 +315,15 @@ export const useChatStore = create((set, get) => ({
       });
 
       // Update the reactions with the current user's profile picture
-      const updatedReactions = res.data.reactions.map(reaction => {
+      const updatedReactions = res.data.reactions.map((reaction) => {
         if (reaction.userId._id === authUser._id) {
           return {
             ...reaction,
             userId: {
               ...reaction.userId,
               profilePic: authUser.profilePic,
-              fullName: authUser.fullName
-            }
+              fullName: authUser.fullName,
+            },
           };
         }
         return reaction;
@@ -324,14 +331,36 @@ export const useChatStore = create((set, get) => ({
 
       set({
         messages: get().messages.map((msg) =>
-          msg._id === messageId
-            ? { ...msg, reactions: updatedReactions }
-            : msg
+          msg._id === messageId ? { ...msg, reactions: updatedReactions } : msg,
         ),
       });
     } catch (error) {
       console.error("Error adding reaction:", error);
       toast.error("Failed to add reaction");
+    }
+  },
+
+  removeReaction: async (messageId, emoji) => {
+    try {
+      const { authUser } = useAuthStore.getState();
+      const res = await axiosInstance.delete(
+        `/messages/reaction/${messageId}`,
+        {
+          data: { emoji },
+        },
+      );
+
+      // Update the reactions in the local state
+      set({
+        messages: get().messages.map((msg) =>
+          msg._id === messageId
+            ? { ...msg, reactions: res.data.reactions }
+            : msg,
+        ),
+      });
+    } catch (error) {
+      console.error("Error removing reaction:", error);
+      toast.error("Failed to remove reaction");
     }
   },
 
@@ -396,7 +425,10 @@ export const useChatStore = create((set, get) => ({
     socket.off("messageDeleted");
     socket.off("messageEdited");
     socket.off("reactionAdded");
+    socket.off("reactionRemoved");
     socket.off("userTyping");
+    socket.off("pinnedContactsUpdated");
+    socket.off("mutedChatsUpdated");
 
     // New message
     socket.on("newMessage", (newMessage) => {
@@ -445,7 +477,7 @@ export const useChatStore = create((set, get) => ({
             `New message from ${newMessage.senderId.fullName || "User"}`,
             {
               duration: 3000,
-            }
+            },
           );
         }
 
@@ -467,7 +499,7 @@ export const useChatStore = create((set, get) => ({
         messages: get().messages.map((msg) =>
           msg.receiverId._id === userId && msg.status === "sent"
             ? { ...msg, status: "delivered" }
-            : msg
+            : msg,
         ),
       });
     });
@@ -476,7 +508,7 @@ export const useChatStore = create((set, get) => ({
     socket.on("messagesRead", ({ userId }) => {
       set({
         messages: get().messages.map((msg) =>
-          msg.receiverId._id === userId ? { ...msg, status: "read" } : msg
+          msg.receiverId._id === userId ? { ...msg, status: "read" } : msg,
         ),
       });
     });
@@ -495,7 +527,7 @@ export const useChatStore = create((set, get) => ({
     socket.on("messageEdited", (editedMessage) => {
       set({
         messages: get().messages.map((msg) =>
-          msg._id === editedMessage._id ? editedMessage : msg
+          msg._id === editedMessage._id ? editedMessage : msg,
         ),
       });
     });
@@ -503,17 +535,17 @@ export const useChatStore = create((set, get) => ({
     // Reaction added
     socket.on("reactionAdded", ({ messageId, reactions }) => {
       const { authUser } = useAuthStore.getState();
-      
+
       // Update reactions with the current user's profile picture if it's their reaction
-      const updatedReactions = reactions.map(reaction => {
+      const updatedReactions = reactions.map((reaction) => {
         if (reaction.userId._id === authUser._id) {
           return {
             ...reaction,
             userId: {
               ...reaction.userId,
               profilePic: authUser.profilePic,
-              fullName: authUser.fullName
-            }
+              fullName: authUser.fullName,
+            },
           };
         }
         return reaction;
@@ -521,7 +553,16 @@ export const useChatStore = create((set, get) => ({
 
       set({
         messages: get().messages.map((msg) =>
-          msg._id === messageId ? { ...msg, reactions: updatedReactions } : msg
+          msg._id === messageId ? { ...msg, reactions: updatedReactions } : msg,
+        ),
+      });
+    });
+
+    // Reaction removed
+    socket.on("reactionRemoved", ({ messageId, reactions }) => {
+      set({
+        messages: get().messages.map((msg) =>
+          msg._id === messageId ? { ...msg, reactions: reactions } : msg,
         ),
       });
     });
@@ -547,6 +588,16 @@ export const useChatStore = create((set, get) => ({
         }, 3500);
       }
     });
+
+    // Pinned contacts updated (sync across devices)
+    socket.on("pinnedContactsUpdated", ({ pinnedContacts }) => {
+      set({ pinnedContacts });
+    });
+
+    // Muted chats updated (sync across devices)
+    socket.on("mutedChatsUpdated", ({ mutedChats }) => {
+      set({ mutedChats });
+    });
   },
 
   unsubscribeFromMessages: () => {
@@ -558,7 +609,10 @@ export const useChatStore = create((set, get) => ({
       socket.off("messageDeleted");
       socket.off("messageEdited");
       socket.off("reactionAdded");
+      socket.off("reactionRemoved");
       socket.off("userTyping");
+      socket.off("pinnedContactsUpdated");
+      socket.off("mutedChatsUpdated");
     }
   },
 
@@ -567,54 +621,66 @@ export const useChatStore = create((set, get) => ({
   },
 
   // Pin/unpin contacts
-  togglePinContact: (userId) => {
-    set((state) => {
-      const isPinned = state.pinnedContacts.includes(userId);
-      const newPinned = isPinned
-        ? state.pinnedContacts.filter((id) => id !== userId)
-        : [...state.pinnedContacts, userId];
-      
-      // Save to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("pinnedContacts", JSON.stringify(newPinned));
-      }
-      
-      return { pinnedContacts: newPinned };
-    });
+  togglePinContact: async (userId) => {
+    try {
+      // Optimistically update UI
+      set((state) => {
+        const isPinned = state.pinnedContacts.includes(userId);
+        const newPinned = isPinned
+          ? state.pinnedContacts.filter((id) => id !== userId)
+          : [...state.pinnedContacts, userId];
+        return { pinnedContacts: newPinned };
+      });
+
+      // Send to backend to sync across devices
+      const res = await axiosInstance.post("/auth/toggle-pin", {
+        contactId: userId,
+      });
+
+      // Update with server response to ensure consistency
+      set({ pinnedContacts: res.data.pinnedContacts });
+    } catch (error) {
+      console.error("Error toggling pin:", error);
+      toast.error("Failed to update pin status");
+      // Revert on error
+      get().loadPinnedContacts();
+    }
   },
 
   loadPinnedContacts: () => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("pinnedContacts");
-      if (saved) {
-        set({ pinnedContacts: JSON.parse(saved) });
-      }
-    }
+    // Pinned contacts are now loaded from server via checkAuth
+    // This function is kept for compatibility but does nothing
   },
 
   // Mute/unmute chats
-  toggleMuteChat: (userId) => {
-    set((state) => {
-      const isMuted = state.mutedChats.includes(userId);
-      const newMuted = isMuted
-        ? state.mutedChats.filter((id) => id !== userId)
-        : [...state.mutedChats, userId];
-      
-      // Save to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("mutedChats", JSON.stringify(newMuted));
-      }
-      
-      return { mutedChats: newMuted };
-    });
+  toggleMuteChat: async (userId) => {
+    try {
+      // Optimistically update UI
+      set((state) => {
+        const isMuted = state.mutedChats.includes(userId);
+        const newMuted = isMuted
+          ? state.mutedChats.filter((id) => id !== userId)
+          : [...state.mutedChats, userId];
+        return { mutedChats: newMuted };
+      });
+
+      // Send to backend to sync across devices
+      const res = await axiosInstance.post("/auth/toggle-mute", {
+        chatId: userId,
+      });
+
+      // Update with server response to ensure consistency
+      set({ mutedChats: res.data.mutedChats });
+    } catch (error) {
+      console.error("Error toggling mute:", error);
+      toast.error("Failed to update mute status");
+      // Revert on error
+      get().loadMutedChats();
+    }
   },
 
   loadMutedChats: () => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("mutedChats");
-      if (saved) {
-        set({ mutedChats: JSON.parse(saved) });
-      }
-    }
+    // Muted chats are now loaded from server via checkAuth
+    // This function is kept for compatibility but does nothing
   },
 }));

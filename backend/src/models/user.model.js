@@ -29,6 +29,14 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    pinnedContacts: {
+      type: [String],
+      default: [],
+    },
+    mutedChats: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,

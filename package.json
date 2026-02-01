@@ -1,6 +1,6 @@
 {
   "name": "chatgeniusx-workspace",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "private": true,
   "description": "ChatGeniusX - modern real-time chat application for private messaging, built with MERN and Socket.IO",
   "scripts": {

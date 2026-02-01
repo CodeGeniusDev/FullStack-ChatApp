@@ -453,6 +453,49 @@ export const addReaction = async (req, res) => {
   }
 };
 
+// Remove reaction from message
+export const removeReaction = async (req, res) => {
+  try {
+    const { id: messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Remove the specific reaction from the user
+    message.reactions = message.reactions.filter(
+      (r) => !(r.userId.toString() === userId.toString() && r.emoji === emoji)
+    );
+    
+    await message.save();
+
+    await message.populate("reactions.userId", "fullName profilePic");
+
+    const io = req.app.get("io");
+    const otherUserId =
+      message.senderId.toString() === userId.toString()
+        ? message.receiverId
+        : message.senderId;
+    const otherUserSocketId = req.app.get("userSocketMap")?.[otherUserId];
+
+    if (otherUserSocketId) {
+      io.to(otherUserSocketId).emit("reactionRemoved", {
+        messageId,
+        reactions: message.reactions,
+      });
+    }
+
+    res.status(200).json(message);
+  } catch (error) {
+    console.error("Error in removeReaction:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Get unread message count
 export const getUnreadCount = async (req, res) => {
   try {

@@ -67,19 +67,24 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'socket-vendor': ['socket.io-client'],
-          'ui-vendor': ['lucide-react', 'react-hot-toast'],
+          // Core React libs
+          'react-core': ['react', 'react-dom'],
+          // Router
+          'react-router': ['react-router-dom'],
+          // Socket and axios
+          'network': ['socket.io-client', 'axios'],
+          // UI libs
+          'ui-libs': ['lucide-react', 'react-hot-toast', 'emoji-picker-react'],
+          // State management
+          'state': ['zustand']
         },
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
-    chunkSizeWarningLimit: 1000,
-    dynamicImportVarsOptions: {
-      warnOnError: true,
-    },
+    chunkSizeWarningLimit: 600,
+    reportCompressedSize: true,
   },
   optimizeDeps: {
     include: [

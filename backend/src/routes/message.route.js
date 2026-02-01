@@ -2,12 +2,13 @@ import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
 import {
   getUsersForSidebar,
-  getMessages,
   sendMessage,
+  getMessages,
   markAsRead,
   deleteMessage,
   editMessage,
   addReaction,
+  removeReaction,
   getUnreadCount,
   clearChat,
 } from "../controllers/message.controller.js";
@@ -23,6 +24,7 @@ router.put("/read/:id", protectRoute, markAsRead);
 router.delete("/:id", protectRoute, deleteMessage);
 router.put("/edit/:id", protectRoute, editMessage);
 router.post("/reaction/:id", protectRoute, addReaction);
+router.delete("/reaction/:id", protectRoute, removeReaction);
 router.get("/unread/count", protectRoute, getUnreadCount);
 router.delete("/clear/:id", protectRoute, clearChat);
 

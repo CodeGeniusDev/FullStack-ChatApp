@@ -3,6 +3,10 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
+import { setupGlobalErrorHandlers } from "./lib/errorHandlers";
+
+// Setup global error handlers FIRST
+setupGlobalErrorHandlers();
 
 // Debug logging to track render cycles
 console.log("🚀 main.jsx: Initializing app");

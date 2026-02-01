@@ -25,6 +25,14 @@ export const useAuthStore = create((set, get) => ({
           authUser: res.data,
           isCheckingAuth: false,
         });
+        
+        // Load pin/mute data from server into chat store
+        const { useChatStore } = await import("./useChatStore.js");
+        useChatStore.setState({
+          pinnedContacts: res.data.pinnedContacts || [],
+          mutedChats: res.data.mutedChats || [],
+        });
+        
         get().connectSocket();
       }
     } catch (error) {
