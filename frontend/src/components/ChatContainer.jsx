@@ -17,7 +17,10 @@ import {
   Plus,
   ChevronLeft,
   ArrowDown,
+  ChevronsDown,
   Loader2,
+  Play,
+  Pause,
 } from "lucide-react";
 import ChatProfileOpener from "./ChatProfileOpener";
 import ImageModel from "./ImageModel";
@@ -33,6 +36,7 @@ const ChatContainer = ({ onClose, user, message }) => {
     setReplyingTo,
     deleteMessage,
     addReaction,
+    removeReaction,
     typingUsers,
     loadMoreMessages,
     hasMoreMessages,
@@ -94,19 +98,17 @@ const ChatContainer = ({ onClose, user, message }) => {
       messagesContainerRef.current;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-    // Consider "near bottom" if within 100px of the bottom
     return distanceFromBottom < 100;
   }, []);
 
-  // Scroll to bottom function
-  const scrollToBottom = useCallback((behavior = "smooth") => {
+  // Scroll to bottom function - INSTANT on initial load
+  const scrollToBottom = useCallback((behavior = "auto") => {
     if (messageEndRef.current) {
       messageEndRef.current.scrollIntoView({ behavior, block: "end" });
     }
   }, []);
 
-  // CRITICAL FIX: Load messages when user changes
-  // DO NOT include function references in dependencies - they cause infinite loops!
+  // ✅ FIXED: Load messages when user changes
   useEffect(() => {
     if (selectedUser?._id) {
       console.log(
@@ -124,40 +126,65 @@ const ChatContainer = ({ onClose, user, message }) => {
       console.log("🔌 Unsubscribing from messages");
       unsubscribeFromMessages();
     };
-  }, [selectedUser?._id]); // ONLY depend on user ID - functions are stable in Zustand
+  }, [selectedUser?._id]);
 
-  // Handle scrolling ONLY when appropriate
+  // ✅ CRITICAL FIX: Scroll to bottom INSTANTLY on initial load - MULTIPLE APPROACHES
   useEffect(() => {
-    // Don't scroll if loading
-    if (isMessagesLoading) return;
+    if (!isMessagesLoading && messages.length > 0 && isInitialLoad.current) {
+      // Method 1: Immediate scroll before render
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop =
+          messagesContainerRef.current.scrollHeight;
+      }
+
+      // Method 2: Use requestAnimationFrame for after-render scroll
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current && messageEndRef.current) {
+          messagesContainerRef.current.scrollTop =
+            messagesContainerRef.current.scrollHeight;
+        }
+      });
+
+      // Method 3: Double RAF for guaranteed execution after paint
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (messagesContainerRef.current && messageEndRef.current) {
+            messagesContainerRef.current.scrollTop =
+              messagesContainerRef.current.scrollHeight;
+          }
+        });
+      });
+
+      isInitialLoad.current = false;
+      previousMessagesLength.current = messages.length;
+    }
+  }, [isMessagesLoading, messages.length]);
+
+  // Handle new messages after initial load
+  useEffect(() => {
+    if (isInitialLoad.current || isMessagesLoading) return;
 
     const messagesLength = messages.length;
     const hasNewMessages = messagesLength > previousMessagesLength.current;
 
-    // Initial load - scroll instantly to bottom
-    if (isInitialLoad.current && messagesLength > 0) {
-      setTimeout(() => {
-        scrollToBottom("auto");
-        isInitialLoad.current = false;
-        previousMessagesLength.current = messagesLength;
-      }, 0);
-      return;
-    }
-
-    // New message arrived
     if (hasNewMessages) {
       const wasNearBottom = checkIfNearBottom();
 
-      // Only auto-scroll if user was already near the bottom
       if (wasNearBottom || shouldAutoScroll) {
-        setTimeout(() => scrollToBottom("smooth"), 50);
+        setTimeout(() => scrollToBottom("auto"), 50);
       }
 
       previousMessagesLength.current = messagesLength;
     }
-  }, [messages.length, isMessagesLoading]); // ONLY depend on message count, not functions
+  }, [
+    messages.length,
+    isMessagesLoading,
+    checkIfNearBottom,
+    shouldAutoScroll,
+    scrollToBottom,
+  ]);
 
-  // Track scroll position to determine auto-scroll behavior
+  // ✅ FIXED: Track scroll position and show/hide scroll button
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -166,31 +193,29 @@ const ChatContainer = ({ onClose, user, message }) => {
       const isNearBottom = checkIfNearBottom();
       setShouldAutoScroll(isNearBottom);
 
-      // Show scroll button when user scrolls up more than 200px from bottom (WhatsApp-like)
       const { scrollTop, scrollHeight, clientHeight } = container;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-      const shouldShow = distanceFromBottom > 200;
-
-      // Debug logging
-      if (shouldShow !== showScrollButton) {
-        console.log(
-          `📊 Scroll button ${shouldShow ? "SHOW" : "HIDE"} - Distance from bottom: ${Math.round(distanceFromBottom)}px`,
-        );
-      }
-
-      setShowScrollButton(shouldShow);
+      setShowScrollButton(distanceFromBottom > 300);
     };
 
     container.addEventListener("scroll", handleScroll);
-
-    // Also check on initial mount
     handleScroll();
 
     return () => container.removeEventListener("scroll", handleScroll);
-  }, []); // Empty array - event listener doesn't need dependencies
+  }, [checkIfNearBottom]);
 
-  // Add touch event listeners with passive: false and velocity calculation
+  useEffect(() => {
+    if (isOtherUserTyping) {
+      const wasNearBottom = checkIfNearBottom();
+
+      if (wasNearBottom || shouldAutoScroll) {
+        setTimeout(() => scrollToBottom("auto"), 100);
+      }
+    }
+  }, [isOtherUserTyping, checkIfNearBottom, shouldAutoScroll, scrollToBottom]);
+
+  // Touch event listeners
   useEffect(() => {
     const menu = menuRef.current;
     if (!menu) return;
@@ -223,14 +248,13 @@ const ChatContainer = ({ onClose, user, message }) => {
         if (shouldClose) {
           setLongPressMessage(null);
         } else {
-          // Animate back to position with easing
           const startTime = performance.now();
           const startY = touchY - touchStartY;
 
           const animate = (currentTime) => {
             const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / 200, 1); // 200ms animation
-            const easing = 1 - Math.pow(1 - progress, 3); // Cubic ease-out
+            const progress = Math.min(elapsed / 200, 1);
+            const easing = 1 - Math.pow(1 - progress, 3);
             const currentY = startY * (1 - easing);
 
             if (menuRef.current) {
@@ -262,9 +286,9 @@ const ChatContainer = ({ onClose, user, message }) => {
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [isDragging, touchStartY, touchY, velocity]); // Empty array - event listener doesn't need dependencies
+  }, [isDragging, touchStartY, touchY, velocity]);
 
-  // Adjust context menu position after render to use actual dimensions
+  // Context menu position adjustment
   useEffect(() => {
     if (!contextMenu || !contextMenuRef.current || contextMenu.positionLocked)
       return;
@@ -275,7 +299,6 @@ const ChatContainer = ({ onClose, user, message }) => {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    // Calculate optimal position based on available space
     let newX = contextMenu.x;
     let newY = contextMenu.y;
     let needsAdjustment = false;
@@ -285,12 +308,9 @@ const ChatContainer = ({ onClose, user, message }) => {
     const spaceOnLeft = newX;
 
     if (spaceOnRight < rect.width + padding) {
-      // Not enough space on right, try left
       if (spaceOnLeft >= rect.width + padding) {
-        // Position to the left of cursor
         newX = newX - rect.width;
       } else {
-        // Not enough space on either side, position at best available spot
         newX = Math.max(
           padding,
           Math.min(newX, viewportWidth - rect.width - padding),
@@ -299,13 +319,11 @@ const ChatContainer = ({ onClose, user, message }) => {
       needsAdjustment = true;
     }
 
-    // Ensure menu doesn't go beyond left edge
     if (newX < padding) {
       newX = padding;
       needsAdjustment = true;
     }
 
-    // Ensure menu doesn't go beyond right edge
     if (newX + rect.width > viewportWidth - padding) {
       newX = viewportWidth - rect.width - padding;
       needsAdjustment = true;
@@ -316,12 +334,9 @@ const ChatContainer = ({ onClose, user, message }) => {
     const spaceAbove = newY;
 
     if (spaceBelow < rect.height + padding) {
-      // Not enough space below, try above
       if (spaceAbove >= rect.height + padding) {
-        // Position above cursor
         newY = newY - rect.height;
       } else {
-        // Not enough space above or below, position at best available spot
         newY = Math.max(
           padding,
           Math.min(newY, viewportHeight - rect.height - padding),
@@ -330,29 +345,23 @@ const ChatContainer = ({ onClose, user, message }) => {
       needsAdjustment = true;
     }
 
-    // Ensure menu doesn't go beyond top edge
     if (newY < padding) {
       newY = padding;
       needsAdjustment = true;
     }
 
-    // Ensure menu doesn't go beyond bottom edge
     if (newY + rect.height > viewportHeight - padding) {
       newY = viewportHeight - rect.height - padding;
       needsAdjustment = true;
     }
 
-    // Only update if adjustment is needed
     if (needsAdjustment) {
-      // Use RAF for smooth update without triggering re-renders
       const rafId = requestAnimationFrame(() => {
-        // Direct DOM manipulation to avoid state update loop
         if (menuElement) {
           menuElement.style.left = `${newX}px`;
           menuElement.style.top = `${newY}px`;
         }
 
-        // Mark as adjusted in state
         setContextMenu((prev) => ({
           ...prev,
           x: newX,
@@ -363,23 +372,17 @@ const ChatContainer = ({ onClose, user, message }) => {
 
       return () => cancelAnimationFrame(rafId);
     }
-  }, [contextMenu?.message?._id, contextMenu?.positionLocked]); // Only depend on message ID and lock status
+  }, [contextMenu?.message?._id, contextMenu?.positionLocked]);
 
   const handleContextMenu = (e, message) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Don't show context menu on mobile (use long press instead)
     if (isMobile) return;
 
-    // Initial position at cursor
-    const initialX = e.clientX;
-    const initialY = e.clientY;
-
-    // Set initial position first (will be adjusted after render)
     setContextMenu({
-      x: initialX,
-      y: initialY,
+      x: e.clientX,
+      y: e.clientY,
       message,
     });
   };
@@ -399,21 +402,17 @@ const ChatContainer = ({ onClose, user, message }) => {
     setContextMenu(null);
   };
 
-  // FIXED: Prevent auto-scroll on reaction
   const handleReaction = useCallback(
     async (messageId, emoji) => {
-      // Store current scroll position
       const container = messagesContainerRef.current;
       const scrollTop = container?.scrollTop || 0;
 
       await addReaction(messageId, emoji);
 
-      // Restore scroll position after reaction
       if (container) {
         container.scrollTop = scrollTop;
       }
 
-      // Close long press menu on mobile after reaction
       if (isMobile) {
         setLongPressMessage(null);
       }
@@ -421,18 +420,16 @@ const ChatContainer = ({ onClose, user, message }) => {
     [addReaction, isMobile],
   );
 
-  // Handle long press for mobile
   const handleTouchStart = useCallback(
     (e, message) => {
       if (!isMobile) return;
 
       longPressTimer.current = setTimeout(() => {
         setLongPressMessage(message);
-        // Trigger haptic feedback if available
         if (navigator.vibrate) {
           navigator.vibrate(50);
         }
-      }, 500); // 500ms long press
+      }, 500);
     },
     [isMobile],
   );
@@ -451,7 +448,6 @@ const ChatContainer = ({ onClose, user, message }) => {
     }
   }, []);
 
-  // Cleanup long press timer
   useEffect(() => {
     return () => {
       if (longPressTimer.current) {
@@ -460,7 +456,7 @@ const ChatContainer = ({ onClose, user, message }) => {
     };
   }, []);
 
-  // Drag and drop handlers for entire chat area
+  // Drag and drop handlers
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -492,7 +488,6 @@ const ChatContainer = ({ onClose, user, message }) => {
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
-      // Trigger file input in MessagesInput component
       const fileEvent = new Event("dropFiles", { bubbles: true });
       fileEvent.files = files;
       window.dispatchEvent(fileEvent);
@@ -505,40 +500,10 @@ const ChatContainer = ({ onClose, user, message }) => {
     setImageRotation(0);
   };
 
-  // Handle video click - same as image
   const handleVideoClick = (message) => {
     setImageModal(message);
     setImageZoom(1);
     setImageRotation(0);
-  };
-
-  const handleDownload = () => {
-    if (!imageModal) return;
-
-    const link = document.createElement("a");
-    link.href = imageModal;
-    link.download = `image_${Date.now()}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleShare = async () => {
-    if (!imageModal) return;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "Shared Image",
-          url: imageModal,
-        });
-      } catch (error) {
-        console.error("Error sharing:", error);
-      }
-    } else {
-      navigator.clipboard.writeText(imageModal);
-      alert("Image URL copied to clipboard!");
-    }
   };
 
   const getStatusIcon = (status) => {
@@ -554,27 +519,26 @@ const ChatContainer = ({ onClose, user, message }) => {
     }
   };
 
+  const handleRemoveReaction = (messageId, emoji) => {
+    removeReaction(messageId, emoji);
+    setReactionDetailsModal(null);
+  };
+
   const renderMessageText = (text) => {
     if (!text) return null;
 
-    // Match URLs (http, https, ftp, etc.) - using non-capturing groups
     const urlPattern = /(?:https?:\/\/|www\.|ftp:\/\/)[^\s]+/gi;
-    // Match email addresses - using non-capturing group
     const emailPattern = /[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+/gi;
-    // Combined pattern
     const combinedPattern = new RegExp(
       `(${urlPattern.source}|${emailPattern.source})`,
       "gi",
     );
 
-    // Split text by both URL and email patterns
     const parts = text.split(combinedPattern);
     return parts.map((part, index) => {
       if (!part) return null;
 
-      // Check if part is a URL
       if (part.match(urlPattern)) {
-        // Add https:// if it's a www link without protocol
         const href = part.startsWith("www.") ? `https://${part}` : part;
         return (
           <a
@@ -582,21 +546,19 @@ const ChatContainer = ({ onClose, user, message }) => {
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-400/95 underline hover:text-blue-400/60 break-words"
+            className="text-blue-400/95 underline hover:text-blue-400/60 break-words transition-colors duration-200"
             onClick={(e) => e.stopPropagation()}
             style={{ wordBreak: "break-all" }}
           >
             {part}
           </a>
         );
-      }
-      // Check if part is an email
-      else if (part.match(emailPattern)) {
+      } else if (part.match(emailPattern)) {
         return (
           <a
             key={index}
             href={`mailto:${part}`}
-            className="text-blue-400/95 underline hover:text-blue-400/60 break-words"
+            className="text-blue-400/95 underline hover:text-blue-400/60 break-words transition-colors duration-200"
             onClick={(e) => e.stopPropagation()}
             style={{ wordBreak: "break-all" }}
           >
@@ -628,7 +590,6 @@ const ChatContainer = ({ onClose, user, message }) => {
     document.activeElement?.blur();
   };
 
-  // Reset emoji set when closing the long press menu
   useEffect(() => {
     if (!longPressMessage) {
       setMobileShowEmojiSet2(false);
@@ -637,17 +598,128 @@ const ChatContainer = ({ onClose, user, message }) => {
 
   const reactionEmojisSet1 = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
   const reactionEmojisSet2 = ["😊", "😍", "🔥", "🎉", "👏", "🤔"];
-  const [activeEmojiSet, setActiveEmojiSet] = useState(reactionEmojisSet1);
 
-  // if (isMessagesLoading) {
-  //   return (
-  //     <div className="flex-1 flex flex-col overflow-auto">
-  //       <ChatHeader />
-  //       <MessageSkeleton />
-  //       <MessagesInput />
-  //     </div>
-  //   );
-  // }
+  // Audio Player
+  const AudioPlayer = ({ audioUrl, messageId }) => {
+    const audioRef = useRef(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      const handleLoadedMetadata = () => {
+        setDuration(audio.duration);
+        setIsLoading(false);
+      };
+
+      const handleTimeUpdate = () => {
+        setCurrentTime(audio.currentTime);
+      };
+
+      const handleEnded = () => {
+        setIsPlaying(false);
+        setCurrentTime(0);
+      };
+
+      const handleCanPlay = () => {
+        setIsLoading(false);
+      };
+
+      audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.addEventListener("timeupdate", handleTimeUpdate);
+      audio.addEventListener("ended", handleEnded);
+      audio.addEventListener("canplay", handleCanPlay);
+
+      return () => {
+        audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        audio.removeEventListener("timeupdate", handleTimeUpdate);
+        audio.removeEventListener("ended", handleEnded);
+        audio.removeEventListener("canplay", handleCanPlay);
+      };
+    }, []);
+
+    const togglePlayPause = () => {
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      if (isPlaying) {
+        audio.pause();
+      } else {
+        audio.play();
+      }
+      setIsPlaying(!isPlaying);
+    };
+
+    const handleSeek = (e) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = x / rect.width;
+      const newTime = percentage * duration;
+
+      audio.currentTime = newTime;
+      setCurrentTime(newTime);
+    };
+
+    const formatTime = (seconds) => {
+      if (!seconds || isNaN(seconds)) return "0:00";
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs.toString().padStart(2, "0")}`;
+    };
+
+    const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+    return (
+      <div className="flex items-center gap-2 bg-base-200/50 rounded-lg p-2 min-w-[200px] max-w-[300px] transition-all duration-200 hover:bg-base-200/70">
+        <audio ref={audioRef} src={audioUrl} preload="metadata" />
+
+        <button
+          onClick={togglePlayPause}
+          disabled={isLoading}
+          className="btn btn-circle btn-sm bg-primary hover:bg-primary-focus text-white border-none transition-all duration-200 hover:scale-110 active:scale-95"
+        >
+          {isLoading ? (
+            <span className="loading loading-spinner loading-xs"></span>
+          ) : isPlaying ? (
+            <Pause size={16} fill="currentColor" />
+          ) : (
+            <Play size={16} fill="currentColor" className="ml-0.5" />
+          )}
+        </button>
+
+        <div className="flex-1 flex flex-col gap-1">
+          <div
+            className="relative h-1 bg-base-300 rounded-full cursor-pointer overflow-hidden group"
+            onClick={handleSeek}
+          >
+            <div
+              className="absolute left-0 top-0 h-full bg-primary rounded-full transition-all duration-100"
+              style={{ width: `${progress}%` }}
+            />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              style={{
+                left: `${progress}%`,
+                transform: "translate(-50%, -50%)",
+              }}
+            />
+          </div>
+
+          <div className="flex justify-between text-xs opacity-70">
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -658,9 +730,9 @@ const ChatContainer = ({ onClose, user, message }) => {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {/* Drag and Drop Overlay */}
+        {/* Drag and Drop Overlay with animation */}
         {isDraggingFile && (
-          <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm border-4 border-dashed border-primary rounded-lg z-[60] flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 bg-primary/20 backdrop-blur-lg border-4 border-dashed border-primary rounded-lg z-[60] flex items-center justify-center pointer-events-none animate-fade-in">
             <div className="text-center bg-base-100/90 p-8 rounded-lg shadow-xl">
               <div className="text-6xl mb-4">📁</div>
               <p className="text-2xl font-bold mb-2">Drop files here</p>
@@ -673,22 +745,22 @@ const ChatContainer = ({ onClose, user, message }) => {
 
         <ChatHeader />
 
-        {/* Messages - FIXED: Added ref to track scroll */}
+        {/* Messages */}
         <div
           ref={messagesContainerRef}
           className="flex-1 overflow-y-auto overflow-x-hidden px-1 sm:px-4 pt-6 space-y-4"
+          style={{ scrollBehavior: "auto" }}
         >
           {messages.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center animate-fade-in">
               <p className="text-zinc-500">
                 No messages yet. Start the conversation!
               </p>
             </div>
           ) : (
             <>
-              {/* Load More Messages Indicator */}
               {hasMoreMessages && (
-                <div className="text-center py-2 mb-4">
+                <div className="text-center py-2 mb-4 animate-fade-in">
                   {isLoadingMore ? (
                     <div className="flex items-center justify-center gap-2 text-primary">
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -697,7 +769,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                   ) : (
                     <button
                       onClick={() => loadMoreMessages(selectedUser._id)}
-                      className="text-primary hover:underline text-sm font-medium px-4 py-2 rounded-lg hover:bg-base-200 transition-colors cursor-pointer"
+                      className="text-primary hover:underline text-sm font-medium px-4 py-2 rounded-lg hover:bg-base-200 transition-all duration-200 cursor-pointer hover:scale-105 active:scale-95"
                     >
                       Load More Messages
                     </button>
@@ -741,9 +813,13 @@ const ChatContainer = ({ onClose, user, message }) => {
 
                     <div className="">
                       <div className="relative group">
-                        <div className="chat-bubble backdrop-blur-lg bg-base-300/50 md:ml-0 ml-4 flex flex-col max-w-70 sm:max-w-lg">
+                        <div
+                          className={`chat-bubble backdrop-blur-lg p-2 px-3 md:ml-0 ml-4 flex flex-col max-w-70 sm:max-w-lg ext-base-content ${
+                            isOwnMessage ? "bg-base-300/70" : "bg-base-200/70"
+                          }`}
+                        >
                           {message.replyTo && (
-                            <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary">
+                            <div className="bg-black/20 rounded p-2 mb-2 text-sm border-l-2 border-primary transition-all duration-200 hover:bg-black/30">
                               <p className="font-semibold text-xs">
                                 {message.replyTo.senderId.fullName}
                               </p>
@@ -770,19 +846,19 @@ const ChatContainer = ({ onClose, user, message }) => {
                               src={message.image}
                               alt="Attachment"
                               loading="lazy"
-                              className="sm:w-[200px] sm:max-h-[300px] max-h-[400px] object-cover rounded-md mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                              className="sm:w-[200px] sm:max-h-[300px] max-h-[400px] object-cover rounded-md mb-2 cursor-pointer hover:opacity-90 transition-all duration-200"
                               onClick={() => handleImageClick(message)}
                             />
                           )}
 
                           {message.video && (
                             <div
-                              className="relative sm:max-w-[300px] max-h-[400px] rounded-md mb-2 overflow-hidden cursor-pointer group"
+                              className="relative sm:max-w-[300px] max-h-[400px] rounded-md mb-2 overflow-hidden cursor-pointer group/video"
                               onClick={() => handleVideoClick(message)}
                             >
                               <video
                                 src={message.video}
-                                className="w-full rounded-md"
+                                className="w-full rounded-md transition-transform duration-200"
                                 preload="metadata"
                                 onError={(e) => {
                                   console.error("Video load error:", e);
@@ -791,9 +867,8 @@ const ChatContainer = ({ onClose, user, message }) => {
                               >
                                 Your browser does not support video playback.
                               </video>
-                              {/* Play button overlay */}
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                                <div className="w-14 h-14 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-colors">
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover/video:bg-black/40 transition-all duration-200">
+                                <div className="w-14 h-14 rounded-full bg-white/90 group-hover/video:bg-white flex items-center justify-center transition-all duration-200">
                                   <svg
                                     className="w-6 h-6 text-gray-800 ml-0.5"
                                     fill="currentColor"
@@ -807,14 +882,10 @@ const ChatContainer = ({ onClose, user, message }) => {
                           )}
 
                           {message.audio && (
-                            <audio
-                              src={message.audio}
-                              controls
-                              className="w-70 mb-2"
-                              preload="metadata"
-                            >
-                              Your browser does not support audio playback.
-                            </audio>
+                            <AudioPlayer
+                              audioUrl={message.audio}
+                              messageId={message._id}
+                            />
                           )}
 
                           {message.text && (
@@ -844,8 +915,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                         <div className="absolute -bottom-3 right-0">
                           {message.reactions &&
                             message.reactions.length > 0 && (
-                              <div className="flex flex-wrap items-center">
-                                {/* Group reactions by emoji */}
+                              <div className="flex flex-wrap items-center gap-1">
                                 {Object.entries(
                                   message.reactions.reduce((acc, reaction) => {
                                     if (!acc[reaction.emoji]) {
@@ -855,10 +925,8 @@ const ChatContainer = ({ onClose, user, message }) => {
                                     return acc;
                                   }, {}),
                                 ).map(([emoji, reactions]) => {
-                                  // Ensure we have the full user data for each reaction
                                   const enrichedReactions = reactions.map(
                                     (reaction) => {
-                                      // For the current user, use authUser data
                                       if (
                                         reaction.userId._id === authUser._id
                                       ) {
@@ -871,7 +939,6 @@ const ChatContainer = ({ onClose, user, message }) => {
                                           },
                                         };
                                       }
-                                      // For the message sender, use the message.senderId data
                                       if (
                                         reaction.userId._id ===
                                         message.senderId._id
@@ -886,7 +953,6 @@ const ChatContainer = ({ onClose, user, message }) => {
                                           },
                                         };
                                       }
-                                      // For other users, ensure we have at least the basic data
                                       return {
                                         ...reaction,
                                         userId: {
@@ -911,48 +977,14 @@ const ChatContainer = ({ onClose, user, message }) => {
                                           message,
                                         });
                                       }}
-                                      className="group relative inline-flex items-center gap-1.5 bg-base-100/10 backdrop-blur-lg border border-base-300/80 rounded-full px-1.5 py-0.5 hover:bg-base-200 hover:border-base-300 cursor-pointer transition-all hover:scale-105 shadow-md hover:shadow-lg"
+                                      className="group relative inline-flex items-center gap-1.5 bg-base-100/10 backdrop-blur-lg border border-base-300/80 rounded-full px-1.5 py-0.5 hover:border-base-300 cursor-pointer transition-all duration-200 hover:scale-105 shadow-md hover:shadow-lg active:scale-95"
                                       title={enrichedReactions
                                         .map((r) => r.userId.fullName)
                                         .join(", ")}
                                     >
-                                      {/* User Avatars */}
-                                      {/* <div className="flex -space-x-2">
-                                        {enrichedReactions
-                                          .slice(0, 3)
-                                          .map((reaction, idx) => (
-                                            <div
-                                              key={`${reaction.userId._id}-${idx}`}
-                                              className="relative"
-                                              style={{
-                                                zIndex:
-                                                  enrichedReactions.length -
-                                                  idx,
-                                              }}
-                                            >
-                                              <img
-                                                src={
-                                                  reaction.userId.profilePic ||
-                                                  "/avatar.png"
-                                                }
-                                                alt={reaction.userId.fullName}
-                                                className="w-4 h-4 rounded-full object-cover"
-                                              />
-                                            </div>
-                                          ))}
-                                        {enrichedReactions.length > 3 && (
-                                          <div className="w-5 h-5 rounded-full ring-2 ring-base-100 bg-base-300 flex items-center justify-center text-[9px] font-bold">
-                                            +{enrichedReactions.length - 3}
-                                          </div>
-                                        )}
-                                      </div> */}
-
-                                      {/* Emoji */}
                                       <span className="text-md leading-none">
                                         {emoji}
                                       </span>
-
-                                      {/* Count badge (only if more than 1 user) */}
                                       {enrichedReactions.length > 1 && (
                                         <span className="text-[10px] font-semibold text-base-content/70 leading-none">
                                           {enrichedReactions.length}
@@ -965,12 +997,12 @@ const ChatContainer = ({ onClose, user, message }) => {
                             )}
                         </div>
 
-                        {/* Quick reactions - Desktop hover ONLY */}
+                        {/* Quick reactions - Desktop hover */}
                         {hoveredMessage === message._id && !isMobile && (
                           <div
                             className={`absolute ${
                               isOwnMessage ? "right-0" : "left-0"
-                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-200/70 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-100`}
+                            } top-0 -translate-y-8 backdrop-blur-lg bg-base-300/30 border border-base-300/20 rounded-full px-2 py-1 flex gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 z-100`}
                           >
                             {!showEmojiSet2 ? (
                               <>
@@ -984,7 +1016,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                                     onMouseEnter={() =>
                                       setHoveredMessage(message._id)
                                     }
-                                    className="hover:scale-125 transition-transform cursor-pointer text-lg"
+                                    className="hover:scale-125 transition-transform duration-200 cursor-pointer text-lg active:scale-110"
                                   >
                                     {emoji}
                                   </button>
@@ -993,9 +1025,8 @@ const ChatContainer = ({ onClose, user, message }) => {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setShowEmojiSet2(true);
-                                    setActiveEmojiSet(reactionEmojisSet2);
                                   }}
-                                  className="text-xl text-center items-center justify-center border border-base-300 transition-transform cursor-pointer p-1 hover:bg-base-300 rounded-full"
+                                  className="text-xl text-center items-center justify-center transition-all duration-200 cursor-pointer p-1 bg-base-300/40 hover:bg-base-300/70 rounded-full active:scale-95"
                                 >
                                   <Plus className="w-5 h-5" />
                                 </button>
@@ -1006,9 +1037,8 @@ const ChatContainer = ({ onClose, user, message }) => {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setShowEmojiSet2(false);
-                                    setActiveEmojiSet(reactionEmojisSet1);
                                   }}
-                                  className="text-xl text-center items-center justify-center border border-base-300 transition-transform cursor-pointer p-1 hover:bg-base-300 rounded-full"
+                                  className="text-xl text-center items-center justify-center transition-all duration-200 cursor-pointer p-1 bg-base-300/40 hover:bg-base-300/70 rounded-full active:scale-95"
                                 >
                                   <ChevronLeft className="w-5 h-5" />
                                 </button>
@@ -1022,7 +1052,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                                     onMouseEnter={() =>
                                       setHoveredMessage(message._id)
                                     }
-                                    className="hover:scale-125 transition-transform cursor-pointer text-lg"
+                                    className="hover:scale-125 transition-transform duration-200 cursor-pointer text-lg active:scale-110"
                                   >
                                     {emoji}
                                   </button>
@@ -1038,7 +1068,7 @@ const ChatContainer = ({ onClose, user, message }) => {
               })}
 
               {isOtherUserTyping && (
-                <div className="chat chat-start">
+                <div className="chat chat-start animate-slide-up">
                   <div className="chat-image avatar">
                     <div className="size-10 rounded-full">
                       <img
@@ -1047,7 +1077,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                       />
                     </div>
                   </div>
-                  <div className="chat-bubble">
+                  <div className="chat-bubble animate-pulse-slow">
                     <div className="flex gap-1">
                       <span className="w-2 h-2 bg-current rounded-full animate-bounce" />
                       <span
@@ -1068,28 +1098,19 @@ const ChatContainer = ({ onClose, user, message }) => {
           )}
         </div>
 
-        {/* Scroll to bottom button - WhatsApp style - MOVED OUTSIDE MESSAGES DIV */}
-        {/* {showScrollButton && (
+        {/* Scroll to Bottom Button with animation */}
+        {showScrollButton && (
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              console.log("🔽 Scroll button clicked");
-
-              // Hide button immediately for better UX
+            onClick={() => {
+              scrollToBottom("auto");
               setShowScrollButton(false);
-
-              // Scroll to bottom
-              scrollToBottom("smooth");
             }}
-            className="w-12 h-12 fixed right-4 sm:right-6 bottom-24 sm:bottom-28 z-50 bg-white/90 backdrop-blur-sm shadow-md shadow-black/20 flex items-center justify-center transition-all duration-200 ease-out border border-gray-200 active:scale-95 animate-[scrollButtonFadeIn_0.15s_ease-out] cursor-pointer"
-            rounded-full
+            className="absolute left-1/2 -translate-x-1/2 bottom-24 z-10 w-8 h-8 bg-base-200 shadow-lg hover:shadow-xl rounded-full flex items-center justify-center transition-all duration-200 border border-base-200 animate-slide-up hover:scale-105 cursor-pointer"
             title="Scroll to bottom"
-            aria-label="Scroll to bottom"
           >
-            <ArrowDown size={22} className="text-gray-800" />
+            <ChevronsDown size={18} className="text-primary" />
           </button>
-        )} */}
+        )}
 
         <MessagesInput
           editingMessage={editingMessage}
@@ -1097,7 +1118,7 @@ const ChatContainer = ({ onClose, user, message }) => {
         />
       </div>
 
-      {/* Context Menu */}
+      {/* Context Menu with smooth animation */}
       {contextMenu && (
         <>
           <div
@@ -1106,7 +1127,7 @@ const ChatContainer = ({ onClose, user, message }) => {
           />
           <div
             ref={contextMenuRef}
-            className="fixed z-50 bg-base-200 rounded-lg shadow-xl py-2 min-w-[160px] max-w-[240px] opacity-0 animate-[fadeIn_0.15s_ease-out_forwards]"
+            className="fixed z-50 backdrop-blur-lg bg-base-200/60 rounded-box shadow-xl p-1 min-w-[160px] max-w-[240px] animate-fade-in"
             style={{
               top: `${contextMenu.y}px`,
               left: `${contextMenu.x}px`,
@@ -1115,7 +1136,7 @@ const ChatContainer = ({ onClose, user, message }) => {
           >
             <button
               onClick={() => handleReply(contextMenu.message)}
-              className="w-full px-4 py-2 hover:bg-base-300 flex items-center gap-2 text-left cursor-pointer"
+              className="w-full px-4 py-2 hover:bg-base-300/60 rounded-xl flex items-center gap-2 text-left cursor-pointer"
             >
               <Reply className="w-4 h-4" />
               Reply
@@ -1124,7 +1145,7 @@ const ChatContainer = ({ onClose, user, message }) => {
             {contextMenu.message.text && (
               <button
                 onClick={() => handleCopy(contextMenu.message.text)}
-                className="w-full px-4 py-2 hover:bg-base-300 flex items-center gap-2 text-left cursor-pointer"
+                className="w-full px-4 py-2 hover:bg-base-300/60 rounded-xl flex items-center gap-2 text-left cursor-pointer"
               >
                 <Copy className="w-4 h-4" />
                 Copy
@@ -1139,7 +1160,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                       setEditingMessage(contextMenu.message);
                       setContextMenu(null);
                     }}
-                    className="w-full px-4 py-2 hover:bg-base-300 flex items-center gap-2 text-left cursor-pointer"
+                    className="w-full px-4 py-2 hover:bg-base-300/60 rounded-xl flex items-center gap-2 text-left cursor-pointer"
                   >
                     <Edit className="w-4 h-4" />
                     Edit
@@ -1148,7 +1169,7 @@ const ChatContainer = ({ onClose, user, message }) => {
 
                 <button
                   onClick={() => handleDelete(contextMenu.message, false)}
-                  className="w-full px-4 py-2 hover:bg-base-300 flex items-center gap-2 text-left cursor-pointer"
+                  className="w-full px-4 py-2 hover:bg-base-300/60 rounded-xl flex items-center gap-2 text-left cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete for me
@@ -1156,7 +1177,7 @@ const ChatContainer = ({ onClose, user, message }) => {
 
                 <button
                   onClick={() => handleDelete(contextMenu.message, true)}
-                  className="w-full px-4 py-2 hover:bg-base-300 flex items-center gap-2 text-left text-red-500 cursor-pointer"
+                  className="w-full px-4 py-2 hover:bg-error/10 rounded-xl flex items-center gap-2 text-left text-red-500 cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete for everyone
@@ -1167,23 +1188,26 @@ const ChatContainer = ({ onClose, user, message }) => {
         </>
       )}
 
-      {/* Mobile Long Press Menu */}
+      {/* Mobile Long Press Menu with smooth slide-up animation */}
       {longPressMessage && isMobile && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/50"
+            className="fixed inset-0 z-40 bg-black/50 animate-fade-in"
             onClick={() => setLongPressMessage(null)}
           />
           <div
             ref={menuRef}
-            className={`fixed z-50 left-0 right-0 rounded-t-2xl backdrop-blur-xl bg-base-300/80 dark:bg-base-300/60 shadow-2xl pb-safe will-change-transform ${isDragging ? "transition-none" : "transition-transform duration-300 ease-[cubic-bezier(0.2,0,0.1,1)]"}`}
+            className={`fixed z-50 left-0 right-0 rounded-t-2xl backdrop-blur-xl bg-base-300/80 dark:bg-base-300/60 shadow-2xl pb-safe will-change-transform animate-slide-up ${
+              isDragging
+                ? "transition-none"
+                : "transition-transform duration-300 ease-[cubic-bezier(0.2,0,0.1,1)]"
+            }`}
             style={{
               bottom: "0",
               transform: isDragging
                 ? `translateY(${Math.max(0, (touchY - touchStartY) * 0.6)}px)`
                 : "translateY(0)",
               touchAction: "pan-y",
-              // Add a slight scale effect when dragging down
               transformOrigin: "bottom center",
               ...(isDragging && {
                 transition: "none",
@@ -1191,7 +1215,6 @@ const ChatContainer = ({ onClose, user, message }) => {
               }),
             }}
             onTouchStart={(e) => {
-              // Only start drag from the top of the menu
               if (e.touches[0].clientY < 100) {
                 const touch = e.touches[0];
                 setTouchStartY(touch.clientY);
@@ -1200,7 +1223,6 @@ const ChatContainer = ({ onClose, user, message }) => {
                 lastTouchTime.current = performance.now();
                 setIsDragging(true);
 
-                // Cancel any ongoing animations
                 if (animationFrameId.current) {
                   cancelAnimationFrame(animationFrameId.current);
                   animationFrameId.current = null;
@@ -1208,21 +1230,19 @@ const ChatContainer = ({ onClose, user, message }) => {
               }
             }}
           >
-            {/* iPhone-style handle bar with touch target */}
             <div
               className="w-full py-3 flex justify-center touch-none"
               onTouchStart={(e) => {
                 setTouchStartY(e.touches[0].clientY);
                 setTouchY(e.touches[0].clientY);
                 setIsDragging(true);
-                // Prevent any parent touch events from interfering
                 e.stopPropagation();
               }}
             >
               <div className="w-12 h-1.5 bg-base-content/30 dark:bg-base-content/20 rounded-full"></div>
             </div>
             <div className="px-4 pb-4 space-y-3">
-              {/* Quick Reactions at Top */}
+              {/* Quick Reactions */}
               <div className="py-3 border-b border-base-300">
                 <div className="flex justify-center gap-4 mb-6">
                   {!mobileShowEmojiSet2 ? (
@@ -1235,17 +1255,14 @@ const ChatContainer = ({ onClose, user, message }) => {
                             handleReaction(longPressMessage._id, emoji);
                             setLongPressMessage(null);
                           }}
-                          className="text-2xl active:scale-110 transition-transform cursor-pointer hover:bg-base-300 rounded-full"
+                          className="text-2xl active:scale-110 transition-transform duration-200"
                         >
                           {emoji}
                         </button>
                       ))}
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMobileShowEmojiSet2(true);
-                        }}
-                        className="text-2xl p-1 active:bg-base-300 active:scale-110 border border-base-300 transition-transform cursor-pointer hover:bg-base-300 rounded-full flex items-center justify-center"
+                        onClick={() => setMobileShowEmojiSet2(true)}
+                        className="text-2xl p-1 active:bg-base-300 border border-base-300 rounded-full flex items-center justify-center transition-all duration-200 active:scale-110"
                       >
                         <Plus className="w-6 h-6" />
                       </button>
@@ -1253,11 +1270,8 @@ const ChatContainer = ({ onClose, user, message }) => {
                   ) : (
                     <div className="flex justify-center items-center gap-5">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMobileShowEmojiSet2(false);
-                        }}
-                        className="text-2xl p-1 active:bg-base-300 active:scale-110 border border-base-300 transition-transform cursor-pointer hover:bg-base-300 rounded-full flex items-center justify-center"
+                        onClick={() => setMobileShowEmojiSet2(false)}
+                        className="text-2xl p-1 active:bg-base-300 border border-base-300 rounded-full flex items-center justify-center transition-all duration-200 active:scale-110"
                       >
                         <ChevronLeft className="w-6 h-6" />
                       </button>
@@ -1269,7 +1283,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                             handleReaction(longPressMessage._id, emoji);
                             setLongPressMessage(null);
                           }}
-                          className="text-2xl active:scale-110 transition-transform cursor-pointer hover:bg-base-300 rounded-full"
+                          className="text-2xl active:scale-110 transition-transform duration-200"
                         >
                           {emoji}
                         </button>
@@ -1280,10 +1294,10 @@ const ChatContainer = ({ onClose, user, message }) => {
                 <div className="flex justify-center mt-1">
                   <div className="flex gap-1">
                     <div
-                      className={`w-1.5 h-1.5 rounded-full ${!mobileShowEmojiSet2 ? "bg-primary" : "bg-base-300"}`}
+                      className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${!mobileShowEmojiSet2 ? "bg-primary scale-125" : "bg-base-300"}`}
                     ></div>
                     <div
-                      className={`w-1.5 h-1.5 rounded-full ${mobileShowEmojiSet2 ? "bg-primary" : "bg-base-300"}`}
+                      className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${mobileShowEmojiSet2 ? "bg-primary scale-125" : "bg-base-300"}`}
                     ></div>
                   </div>
                 </div>
@@ -1295,7 +1309,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                   handleReply(longPressMessage);
                   setLongPressMessage(null);
                 }}
-                className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left cursor-pointer"
+                className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left transition-all duration-200 active:scale-95"
               >
                 <Reply className="w-5 h-5" />
                 <span>Reply</span>
@@ -1307,7 +1321,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                     handleCopy(longPressMessage.text);
                     setLongPressMessage(null);
                   }}
-                  className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left cursor-pointer"
+                  className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left transition-all duration-200 active:scale-95"
                 >
                   <Copy className="w-5 h-5" />
                   <span>Copy</span>
@@ -1322,7 +1336,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                         setEditingMessage(longPressMessage);
                         setLongPressMessage(null);
                       }}
-                      className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left cursor-pointer"
+                      className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left transition-all duration-200 active:scale-95"
                     >
                       <Edit className="w-5 h-5" />
                       <span>Edit</span>
@@ -1334,7 +1348,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                       handleDelete(longPressMessage, false);
                       setLongPressMessage(null);
                     }}
-                    className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left cursor-pointer"
+                    className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left transition-all duration-200 active:scale-95"
                   >
                     <Trash2 className="w-5 h-5" />
                     <span>Delete for me</span>
@@ -1345,7 +1359,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                       handleDelete(longPressMessage, true);
                       setLongPressMessage(null);
                     }}
-                    className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left text-red-500 cursor-pointer"
+                    className="w-full px-4 py-3 bg-base-300 hover:bg-base-100 rounded-lg flex items-center gap-3 text-left text-red-500 transition-all duration-200 active:scale-95"
                   >
                     <Trash2 className="w-5 h-5" />
                     <span>Delete for everyone</span>
@@ -1355,7 +1369,7 @@ const ChatContainer = ({ onClose, user, message }) => {
 
               <button
                 onClick={() => setLongPressMessage(null)}
-                className="w-full px-4 py-3 bg-base-100 hover:bg-base-300 rounded-lg text-center cursor-pointer font-medium"
+                className="w-full px-4 py-3 bg-base-100 hover:bg-base-300 rounded-lg text-center font-medium transition-all duration-200 active:scale-95"
               >
                 Cancel
               </button>
@@ -1374,14 +1388,14 @@ const ChatContainer = ({ onClose, user, message }) => {
         />
       )}
 
-      {/* Reaction Details Modal */}
+      {/* Reaction Details Modal with animation */}
       {reactionDetailsModal && (
         <>
           <div
             className="fixed inset-0 z-[90] bg-black/50"
             onClick={() => setReactionDetailsModal(null)}
           />
-          <div className="fixed z-[95] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 backdrop-blur-lg bg-base-200/90 rounded-lg shadow-xl p-4 min-w-[280px] max-w-[90vw] max-h-[80vh] overflow-auto">
+          <div className="fixed z-[95] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 backdrop-blur-lg bg-base-200/90 rounded-box shadow-xl p-4 min-w-[280px] max-w-[90vw] max-h-[80vh] overflow-auto animate-slide-down">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <span className="text-2xl">{reactionDetailsModal.emoji}</span>
@@ -1389,7 +1403,7 @@ const ChatContainer = ({ onClose, user, message }) => {
               </h3>
               <button
                 onClick={() => setReactionDetailsModal(null)}
-                className="btn btn-ghost btn-sm btn-circle"
+                className="btn btn-ghost btn-sm btn-circle transition-all duration-200 active:scale-95"
               >
                 <X size={20} />
               </button>
@@ -1399,7 +1413,15 @@ const ChatContainer = ({ onClose, user, message }) => {
               {reactionDetailsModal.reactions.map((reaction, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-3 p-2 hover:bg-base-300 rounded-lg"
+                  onClick={() => {
+                    if (reaction.userId._id === authUser._id) {
+                      handleRemoveReaction(
+                        reactionDetailsModal.message._id,
+                        reaction.emoji,
+                      );
+                    }
+                  }}
+                  className="flex items-center gap-3 p-2 hover:bg-base-300/70 rounded-lg transition-all duration-200 cursor-pointer"
                 >
                   <img
                     src={reaction.userId.profilePic || "/avatar.png"}
@@ -1410,7 +1432,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                     <p className="font-medium">{reaction.userId.fullName}</p>
                     <p className="text-xs text-base-content/70">
                       {reaction.userId._id === authUser._id
-                        ? "You"
+                        ? "Tap to remove"
                         : reaction.userId._id ===
                             reactionDetailsModal.message.senderId._id
                           ? "Sender"

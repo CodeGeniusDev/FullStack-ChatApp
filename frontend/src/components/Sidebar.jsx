@@ -39,6 +39,7 @@ const Sidebar = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [, forceUpdate] = useState({}); // Force re-render trigger
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window !== "undefined") {
       const savedWidth = localStorage.getItem(SIDEBAR.STORAGE_KEY);
@@ -134,8 +135,7 @@ const Sidebar = () => {
   useEffect(() => {
     getUsers();
     getUnreadCounts();
-    loadPinnedContacts();
-    loadMutedChats();
+    // Pin/mute data is now loaded from server via checkAuth, no need to load from localStorage
   }, []); // Empty array - only fetch once on mount
 
   useEffect(() => {
@@ -277,13 +277,13 @@ const Sidebar = () => {
     }
   }, [contextMenu]);
 
-  if (isUsersLoading) {
-    return (
-      <div className="hidden lg:block">
-        <SidebarSkeleton />
-      </div>
-    );
-  }
+  // if (isUsersLoading) {
+  //   return (
+  //     <div className="hidden lg:block">
+  //       <SidebarSkeleton />
+  //     </div>
+  //   );
+  // }
 
   return (
     <>
@@ -313,7 +313,7 @@ const Sidebar = () => {
                 </button>
 
                 {isDropdownOpen && (
-                  <div className="fixed left-1/2 transform -translate-x-1/2 mt-1 w-48 backdrop-blur-lg bg-base-100/10 rounded-lg shadow-xl z-50 border border-base-300 lg:hidden">
+                  <div className="fixed left-1/2 transform -translate-x-1/2 mt-1 w-48 backdrop-blur-lg bg-base-100/10 rounded-box shadow-xl z-50 border border-base-300 lg:hidden">
                     <div className="p-3 space-y-2">
                       <div className="font-medium text-sm">Contacts</div>
                       <div className="text-xs text-zinc-500">
@@ -390,126 +390,122 @@ const Sidebar = () => {
 
         {/* User List */}
         <div className="flex-1 overflow-y-auto p-3">
-          {users.length === 0 ? (
-            <div className="text-center text-zinc-500 py-8">No users found</div>
-          ) : (
-            sortedUsers.map((user) => {
-              const unreadCount = unreadCounts[user._id] || 0;
-              const isOnline = onlineUsers.includes(user._id);
-              const lastMessage = user.lastMessage;
-              const isSelected = selectedUser?._id === user._id;
-              const isPinned = pinnedContacts.includes(user._id);
-              const isMuted = mutedChats.includes(user._id);
+          {sortedUsers.map((user) => {
+            const unreadCount = unreadCounts[user._id] || 0;
+            const isOnline = onlineUsers.includes(user._id);
+            const lastMessage = user.lastMessage;
+            const isSelected = selectedUser?._id === user._id;
+            const isPinned = pinnedContacts.includes(user._id);
+            const isMuted = mutedChats.includes(user._id);
 
-              return (
-                <button
-                  key={user._id}
-                  onClick={(e) => {
-                    if (isMobile) {
-                      e.stopPropagation();
-                      setSelectedUser(user);
-                      setIsProfileOpen(true);
-                    } else {
-                      setSelectedUser(user);
-                    }
-                  }}
-                  onContextMenu={(e) => handleContextMenu(e, user)}
-                  className={`w-full p-3 flex items-center gap-3 rounded-sm transition-colors cursor-pointer ${isSelected ? "bg-base-200" : "hover:bg-base-200/50"}`}
-                >
-                  <div className="relative mx-auto lg:mx-0 flex-shrink-0">
-                    <div className="size-12 rounded-full overflow-hidden bg-base-200">
-                      <img
-                        src={user.profilePic || "/avatar.png"}
-                        alt={user.fullName || "User"}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                    {isOnline && (
-                      <span
-                        className="absolute bottom-0 right-0 size-3 bg-green-500 
-                      rounded-full ring-2 ring-base-100"
-                      />
-                    )}
-                    {!isMuted && unreadCount > 0 && (
-                      <span
-                        className="absolute -top-1 -right-1 bg-primary text-primary-content 
+            return (
+              <button
+                key={user._id}
+                onClick={(e) => {
+                  if (isMobile) {
+                    e.stopPropagation();
+                    setSelectedUser(user);
+                    setIsProfileOpen(true);
+                  } else {
+                    setSelectedUser(user);
+                  }
+                }}
+                onContextMenu={(e) => handleContextMenu(e, user)}
+                className={`w-full p-3 flex items-center gap-3 rounded-sm transition-colors cursor-pointer animate-slide-up ${isSelected ? "bg-base-200" : "hover:bg-base-200/50"}`}
+              >
+                <div className="relative mx-auto lg:mx-0 flex-shrink-0">
+                  <div className="size-12 rounded-full overflow-hidden bg-base-200">
+                    <img
+                      src={user.profilePic || "/avatar.png"}
+                      alt={user.fullName || "User"}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                  {isOnline && (
+                    <span
+                      className="absolute bottom-0 right-0 size-3 bg-green-500 
+                      rounded-full ring ring-base-100"
+                    />
+                  )}
+                  {!isMuted && unreadCount > 0 && (
+                    <span
+                      className="absolute -top-1 -right-1 bg-primary text-primary-content 
                       text-xs font-bold rounded-full h-5 min-w-[20px] flex items-center 
                       justify-center px-1"
-                      >
-                        {unreadCount > 99 ? "99+" : unreadCount}
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </div>
+
+                <div className="block text-left min-w-0 flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        {user.fullName || "Unknown User"}
+                      </div>
+                      {isPinned && (
+                        <Pin
+                          className="w-3.5 h-3.5 text-gray-400 rotate-45 shrink-0"
+                          fill="currentColor"
+                        />
+                      )}
+                      {isMuted && (
+                        <BellOff className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      )}
+
+                      {/* <Verified className="w-3.5 h-3.5 text-primary shrink-0" /> */}
+                    </div>
+                    {lastMessage && (
+                      <span className="text-xs text-zinc-400 shrink-0 ml-2">
+                        {formatLastSeen(lastMessage.createdAt)}
                       </span>
                     )}
-                  </div>
-
-                  <div className="block text-left min-w-0 flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        <div className="font-medium truncate">
-                          {user.fullName || "Unknown User"}
-                        </div>
-                        {isPinned && (
-                          <Pin
-                            className="w-3.5 h-3.5 text-gray-400 rotate-45 shrink-0"
-                            fill="currentColor"
-                          />
-                        )}
-                        {isMuted && (
-                          <BellOff className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                        )}
-
-                        {/* <Verified className="w-3.5 h-3.5 text-primary shrink-0" /> */}
-                      </div>
-                      {lastMessage && (
-                        <span className="text-xs text-zinc-400 shrink-0 ml-2">
-                          {formatLastSeen(lastMessage.createdAt)}
-                        </span>
-                      )}
-                      {/* Todo: Add dropdown menu */}
-                      {/* <button className="bg-base-300 rounded-sm">
+                    {/* Todo: Add dropdown menu */}
+                    {/* <button className="bg-base-300 rounded-sm">
                         <ChevronDown className="w-4 h-4 text-white"/>
                       </button> */}
-                    </div>
-
-                    {/* Last message preview */}
-                    {lastMessage ? (
-                      <div className="flex items-center gap-1">
-                        <p
-                          className={`text-sm truncate ${
-                            !isMuted && unreadCount > 0
-                              ? "text-primary font-semibold"
-                              : "text-zinc-400"
-                          }`}
-                        >
-                          {lastMessage.senderId === user._id ? "" : "You: "}
-                          {lastMessage.text
-                            ? truncateText(lastMessage.text, 30)
-                            : lastMessage.image
-                              ? "📷 Photo"
-                              : lastMessage.video
-                                ? "🎥 Video"
-                                : lastMessage.audio
-                                  ? "🎵 Audio"
-                                  : lastMessage.emoji
-                                    ? "😊 Emoji"
-                                    : "Message"}
-                        </p>
-                        {!isMuted && unreadCount > 0 && (
-                          <span className="flex-shrink-0 bg-primary text-primary-content text-xs font-bold rounded-full px-1.5 py-0.5">
-                            {unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-zinc-400">
-                        {isOnline ? "Online" : formatLastSeen(user.lastSeen)}
-                      </div>
-                    )}
                   </div>
-                </button>
-              );
-            })
-          )}
+
+                  {/* Last message preview */}
+                  {lastMessage ? (
+                    <div className="flex items-center gap-1">
+                      <p
+                        className={`text-sm truncate ${
+                          !isMuted && unreadCount > 0
+                            ? "text-primary font-semibold"
+                            : "text-zinc-400"
+                        }`}
+                      >
+                        {lastMessage.senderId === user._id ? "" : "You: "}
+                        {lastMessage.text
+                          ? truncateText(lastMessage.text, 30)
+                          : lastMessage.image
+                            ? "📷 Photo"
+                            : lastMessage.video
+                              ? "🎥 Video"
+                              : lastMessage.audio
+                                ? "🎵 Audio"
+                                : lastMessage.emoji
+                                  ? "😊 Emoji"
+                                  : "Message"}
+                      </p>
+                      {!isMuted && unreadCount > 0 && (
+                        <span className="flex-shrink-0 bg-primary text-primary-content text-xs font-bold rounded-full px-1.5 py-0.5">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-zinc-400">
+                      {isOnline ? "Online" : formatLastSeen(user.lastSeen)}
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Resize handle - Desktop only */}
@@ -542,31 +538,33 @@ const Sidebar = () => {
           />
           <div
             ref={contextMenuRef}
-            className="fixed z-50 bg-base-200 rounded-lg shadow-xl py-2 min-w-[180px]"
+            className="fixed z-50 backdrop-blur-lg bg-base-200/60 rounded-box p-1 shadow-xl min-w-[180px] animate-fade-in"
             style={{
               top: `${contextMenu.y}px`,
               left: `${contextMenu.x}px`,
             }}
           >
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                togglePinContact(contextMenu.user._id);
+                await togglePinContact(contextMenu.user._id);
                 setContextMenu(null);
+                forceUpdate({}); // Force UI update
               }}
-              className="w-full px-4 py-2 hover:bg-base-300 flex items-center gap-2 text-left cursor-pointer"
+              className="w-full px-4 py-2 rounded-xl hover:bg-base-300/60 flex items-center gap-2 text-left cursor-pointer"
             >
               <Pin className="w-4 h-4" />
               {pinnedContacts.includes(contextMenu.user._id) ? "Unpin" : "Pin"}
             </button>
 
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                toggleMuteChat(contextMenu.user._id);
+                await toggleMuteChat(contextMenu.user._id);
                 setContextMenu(null);
+                forceUpdate({}); // Force UI update
               }}
-              className="w-full px-4 py-2 hover:bg-base-300 flex items-center gap-2 text-left cursor-pointer"
+              className="w-full px-4 py-2 rounded-xl hover:bg-base-300/60 flex items-center gap-2 text-left cursor-pointer"
             >
               {mutedChats.includes(contextMenu.user._id) ? (
                 <>
@@ -584,7 +582,7 @@ const Sidebar = () => {
             {/* User Profile Info */}
             <button
               onClick={handleProfileClick}
-              className="w-full px-4 py-2 hover:bg-base-300 flex items-center gap-2 text-left cursor-pointer"
+              className="w-full px-4 py-2 rounded-xl hover:bg-base-300/60 flex items-center gap-2 text-left cursor-pointer"
             >
               <User className="w-4 h-4" />
               View Profile

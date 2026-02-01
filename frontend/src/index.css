@@ -1,7 +1,34 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
-/* Context menu fade-in animation */
+/* ============================================
+   SMOOTH ANIMATIONS - UX ENHANCEMENT
+   ============================================ */
+
+/* Slide up animation for mobile menus */
+@keyframes slideUpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slide down animation */
+@keyframes slideDownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -13,34 +40,205 @@
   }
 }
 
-/* Scroll button fade-in/out animation - WhatsApp style */
-@keyframes scrollButtonFadeIn {
+@keyframes slideUpFadeIn {
   from {
     opacity: 0;
-    transform: scale(0.5);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0);
   }
 }
 
-@keyframes scrollButtonFadeOut {
+@keyframes slideDownFadeIn {
   from {
-    opacity: 1;
-    transform: scale(1);
+    opacity: 0;
+    transform: translateY(-20px);
   }
   to {
-    opacity: 0;
-    transform: scale(0.5);
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-/* Optimized transitions - only for interactive elements */
-button, a, input, select, textarea {
-  transition: background-color 0.2s ease, color 0.2s ease,
-    border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
+
+/* ============================================
+   SMOOTH TRANSITIONS FOR INTERACTIVE ELEMENTS
+   ============================================ */
+
+/* Base transitions for all interactive elements */
+button,
+a,
+input,
+select,
+textarea,
+.btn,
+.dropdown-content,
+.modal,
+.menu,
+.chat-bubble,
+.avatar {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Smoother transitions for hover states */
+button:hover,
+a:hover,
+.btn:hover,
+.menu li:hover,
+.dropdown-content li:hover {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Active state transitions (faster) */
+button:active,
+a:active,
+.btn:active {
+  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   COMPONENT-SPECIFIC ANIMATIONS
+   ============================================ */
+
+/* Dropdown animations */
+.dropdown-content {
+  animation: slideDownFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: top;
+}
+
+/* Modal animations */
+.modal {
+  animation: modalFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-box {
+  animation: slideDownFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Chat bubble animations */
+.chat.chat-start .chat-bubble {
+  animation: slideInLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chat.chat-end .chat-bubble {
+  animation: slideInRight 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Button press effect */
+.btn:active {
+  transform: scale(0.95);
+}
+
+.btn-circle:active {
+  transform: scale(0.9);
+}
+
+/* Smooth badge pulse */
+.badge-primary {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Loading spinner smooth rotation */
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* ============================================
+   SCROLLBAR STYLES
+   ============================================ */
+
+* {
+  -ms-overflow-style: none; /* IE & Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* ============================================
+   UTILITY ANIMATION CLASSES
+   ============================================ */
+
+/* Fade in */
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Slide up */
+.animate-slide-up {
+  animation: slideUpFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Slide down */
+.animate-slide-down {
+  animation: slideDownFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Bounce */
+.animate-bounce-once {
+  animation: bounce 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Shake */
+.animate-shake {
+  animation: shake 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Notification pop */
+.animate-notification {
+  animation: notificationPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Scroll button specific animation */
+.animate-scroll-button-in {
+  animation: scrollButtonFadeIn 0.15s ease-out forwards;
+}
+
+.animate-scroll-button-out {
+  animation: scrollButtonFadeOut 0.15s ease-out forwards;
+}
+
+/* ============================================
+   PERFORMANCE OPTIMIZATIONS
+   ============================================ */
+
+/* Enable hardware acceleration for smooth animations */
+.dropdown-content,
+.modal,
+.chat-bubble,
+.btn,
+[class*="animate-"] {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================
+   THEME CONFIGURATIONS (Keep existing themes)
+   ============================================ */
 
 @plugin "daisyui/theme" {
   name: "cupcake";
