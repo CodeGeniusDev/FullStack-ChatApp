@@ -23,7 +23,7 @@ const ChatHeader = () => {
   };
 
   return (
-    <div className="p-2.5 border-b border-base-300 bg-base-100">
+    <div className="p-2.5 border-b border-base-300 bg-base-200/20">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Back arrow */}
@@ -106,7 +106,11 @@ const ChatHeader = () => {
 
         {/* More options dropdown */}
         <div className="dropdown dropdown-end">
-          <label tabIndex={0} className="btn btn-circle btn-sm">
+          <label
+            tabIndex={0}
+            data-tip="More options"
+            className="btn btn-circle btn-sm flex lg:tooltip lg:tooltip-left"
+          >
             <MoreVertical size={16} />
           </label>
           <ul

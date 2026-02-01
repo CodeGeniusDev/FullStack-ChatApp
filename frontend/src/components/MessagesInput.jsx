@@ -276,7 +276,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   return (
     <div className="sticky bottom-0 left-0 right-0 lg:static z-10">
       <div
-        className="p-3 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/90 lg:bg-base-100/10 relative shadow-lg lg:shadow-none"
+        className="p-3 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/80 relative shadow-lg lg:shadow-none"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -426,10 +426,10 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
           {!editingMessage && (
             <button
               type="button"
-              className="btn btn-circle btn-ghost btn-sm sm:btn-md"
+              className="btn btn-circle btn-ghost btn-sm sm:btn-md lg:tooltip flex text-base-content/70 hover:text-base-content transition-colors"
+              data-tip="Attach"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              title="Attach file"
             >
               {isUploading ? (
                 <span className="loading loading-spinner loading-sm" />
@@ -471,13 +471,14 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
             <button
               type="button"
               data-testid="emoji-button"
-              className="btn btn-ghost btn-sm btn-circle text-gray-400 hover:text-gray-600 transition-colors"
+              className="btn btn-ghost btn-md btn-circle text-base-content/70 hover:text-base-content transition-colors lg:tooltip flex"
+              data-tip="Emoji"
               onClick={(e) => {
                 e.stopPropagation();
                 setShowEmojiPicker(!showEmojiPicker);
               }}
             >
-              <Smile size={20} />
+              <Smile size={22} />
             </button>
 
             {showEmojiPicker && (
@@ -500,19 +501,21 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
           {text.trim() || imagePreview || mediaPreviews.length > 0 ? (
             <button
               type="submit"
-              className="btn btn-circle btn-primary btn-md shadow-lg hover:shadow-xl transition-all hover:scale-105"
+              className="btn btn-circle btn-primary btn-md shadow-lg hover:shadow-xl transition-all lg:tooltip flex"
+              data-tip="Send"
               disabled={
                 (!text.trim() && !imagePreview && mediaPreviews.length === 0) ||
                 isUploading
               }
               title="Send message"
             >
-              <Send size={20} className="ml-0.5" />
+              <Send size={20} />
             </button>
           ) : (
             <button
               type="button"
-              className="btn btn-circle btn-ghost btn-md hover:bg-base-200/50 text-base-content/70 hover:text-base-content"
+              className="btn btn-circle btn-ghost btn-md hover:bg-base-200/50 text-base-content/70 hover:text-base-content transition-colors lg:tooltip flex"
+              data-tip="Voice"
               title="Voice message"
             >
               <Mic size={20} />
