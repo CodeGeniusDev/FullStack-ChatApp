@@ -12,6 +12,12 @@ import {
   FileText,
   Video,
   File,
+  Info,
+  MessageCircle,
+  Circle,
+  CalendarDays,
+  Hash,
+  Pin,
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
@@ -62,6 +68,8 @@ const ChatProfileOpener = ({
   const [isExporting, setIsExporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isMuted, setIsMuted] = useState(user.isMuted || false);
+  const [isPinned, setIsPinned] = useState(user.isPinned || false);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -223,6 +231,32 @@ const ChatProfileOpener = ({
     }
   };
 
+  const handleToggleMute = () => {
+    setIsMuted(!isMuted);
+    // TODO: Add API call to update mute status
+    toast.success(isMuted ? "User unmuted" : "User muted");
+  };
+
+  const handleTogglePin = () => {
+    setIsPinned(!isPinned);
+    // TODO: Add API call to update pin status
+    toast.success(isPinned ? "Chat unpinned" : "Chat pinned");
+  };
+
+  const handleSearchResultClick = (message) => {
+    // Close the profile modal
+    onClose();
+
+    // TODO: Navigate to the specific message in the chat
+    // This would typically involve:
+    // 1. Scrolling to the specific message
+    // 2. Highlighting the message
+    // 3. Maybe focusing the chat input
+
+    console.log("Navigate to message:", message._id);
+    toast.success("Navigating to message...");
+  };
+
   // Clear chat functionality
   const handleClearChat = async () => {
     setIsClearing(true);
@@ -263,13 +297,13 @@ const ChatProfileOpener = ({
       )}
 
       <div
-        className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+        className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-20"
         // onClick={onClose}
       >
         <div
           // ref={modalRef}
           onClick={handleModalClick}
-          className="flex flex-col backdrop-blur-lg bg-base-100/80 rounded-lg w-full max-w-xl relative max-h-[90vh] overflow-hidden"
+          className="flex flex-col backdrop-blur-lg bg-base-100/80 rounded-box w-full max-w-xl relative max-h-[90vh] overflow-hidden animate-fade-in"
         >
           {/* top side */}
           <div className="flex flex-col md:flex-row h-[60vh] md:h-[50vh]">
@@ -319,18 +353,21 @@ const ChatProfileOpener = ({
 
                 {/* Desktop: Vertical menu */}
                 <ul className="menu w-full p-2 bg-transparent hidden md:block">
+                  <div className="text-left py-1 pl-3">
+                    <h3 className="text-lg font-semibold mb-2">Contact</h3>
+                  </div>
                   <li className="mb-1">
                     <a
-                      className={`flex items-center gap-3 hover:bg-base-300 rounded-lg p-3 ${activeTab === "contact" ? "bg-base-300" : ""}`}
+                      className={`flex items-center gap-3 hover:bg-base-300 rounded-lg p-2 ${activeTab === "contact" ? "bg-base-300" : ""}`}
                       onClick={() => setActiveTab("contact")}
                     >
-                      <User size={18} />
-                      <span>View Contact</span>
+                      <Info size={18} />
+                      <span>Info</span>
                     </a>
                   </li>
                   <li className="mb-1">
                     <a
-                      className={`flex items-center gap-3 hover:bg-base-300 rounded-lg p-3 ${activeTab === "search" ? "bg-base-300" : ""}`}
+                      className={`flex items-center gap-3 hover:bg-base-300 rounded-lg p-2 ${activeTab === "search" ? "bg-base-300" : ""}`}
                       onClick={() => setActiveTab("search")}
                     >
                       <Search size={18} />
@@ -339,7 +376,7 @@ const ChatProfileOpener = ({
                   </li>
                   <li className="mb-1">
                     <a
-                      className={`flex items-center gap-3 hover:bg-base-300 rounded-lg p-3 ${activeTab === "media" ? "bg-base-300" : ""}`}
+                      className={`flex items-center gap-3 hover:bg-base-300 rounded-lg p-2 ${activeTab === "media" ? "bg-base-300" : ""}`}
                       onClick={() => setActiveTab("media")}
                     >
                       <Image size={18} />
@@ -348,7 +385,7 @@ const ChatProfileOpener = ({
                   </li>
                   <li className="mb-1">
                     <a
-                      className={`flex items-center gap-3 hover:bg-base-300 rounded-lg p-3 ${activeTab === "export" ? "bg-base-300" : ""}`}
+                      className={`flex items-center gap-3 hover:bg-base-300 rounded-lg p-2 ${activeTab === "export" ? "bg-base-300" : ""}`}
                       onClick={() => setActiveTab("export")}
                     >
                       <Download size={18} />
@@ -357,7 +394,7 @@ const ChatProfileOpener = ({
                   </li>
                   <li>
                     <a
-                      className={`flex items-center gap-3 text-error hover:bg-error/10 rounded-lg p-3 ${activeTab === "clear" ? "bg-error/10" : ""}`}
+                      className={`flex items-center gap-3 text-error hover:bg-error/10 rounded-lg p-2 ${activeTab === "clear" ? "bg-error/10" : ""}`}
                       onClick={() => setActiveTab("clear")}
                     >
                       <Trash2 size={18} />
@@ -369,11 +406,11 @@ const ChatProfileOpener = ({
             </div>
 
             {/* right side */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 max-h-[60vh]">
+            <div className="flex-1 overflow-y-auto p-4 md:py-5 max-h-[60vh]">
               {/* Contact Info */}
               {activeTab === "contact" && (
                 <div>
-                  <div className="flex flex-col sm:flex-row items-center gap-4 group px-2">
+                  <div className="flex flex-col sm:flex-row items-center gap-4 group pb-4 px-2">
                     <div className="avatar">
                       <div
                         className="w-20 sm:w-24 rounded-full hover:opacity-75 cursor-pointer"
@@ -406,44 +443,108 @@ const ChatProfileOpener = ({
                     </div>
                   </div>
 
-                  <div className="divider my-2"></div>
+                  {/* <div className="divider my-2"></div> */}
 
                   <div className="space-y-2">
-                    <div>
-                      <p className="text-sm font-medium">User ID:</p>
-                      <p className="text-sm text-base-content/70 truncate">
-                        {user._id}
-                      </p>
+                    <div className="bg-base-300/30 border border-base-300 rounded-lg p-2">
+                      <div className="flex justify-between">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <MessageCircle
+                            size={16}
+                            className="text-base-content/60"
+                          />
+                          Bio
+                        </p>
+                        <p className="text-sm text-base-content/70">
+                          {user.bio || "No bio provided"}
+                        </p>
+                      </div>
+                      <div className="divider my-1"></div>
+                      <div className="flex justify-between">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <Circle size={16} className="text-base-content/60" />
+                          Status
+                        </p>
+                        <p className="text-sm text-base-content/70 flex items-center gap-1">
+                          {onlineUsers.includes(user._id) ? (
+                            <>
+                              <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+                              <span>Online</span>
+                            </>
+                          ) : (
+                            `Last seen ${formatLastSeen(
+                              user.updatedAt || user.lastSeen,
+                            )}`
+                          )}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">Status:</p>
-                      <p className="text-sm text-base-content/70 flex items-center gap-1">
-                        {onlineUsers.includes(user._id) ? (
-                          <>
-                            <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
-                            <span>Online</span>
-                          </>
-                        ) : (
-                          `Last seen ${formatLastSeen(
-                            user.updatedAt || user.lastSeen,
-                          )}`
-                        )}
-                      </p>
+
+                    <div className="bg-base-300/30 border border-base-300 rounded-lg p-2">
+                      <div className="flex justify-between">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <Pin size={16} className="text-base-content/60" />
+                          Pin in chat
+                        </p>
+                        {/* TODO: add original logic */}
+                        <p className="text-sm text-base-content/70 truncate">
+                          <label className="cursor-pointer flex items-center gap-2">
+                            <span className="text-xs">
+                              {isPinned ? "Unpin" : "Pin"}
+                            </span>
+                            <input
+                              type="checkbox"
+                              checked={isPinned}
+                              onChange={handleTogglePin}
+                              className="checkbox checkbox-xs"
+                            />
+                          </label>
+                        </p>
+                      </div>
                     </div>
-                    <div className="divider my-2"></div>
-                    <div>
-                      <p className="text-sm font-medium">Joined:</p>
-                      <p className="text-sm text-base-content/70">
-                        {user.createdAt
-                          ? new Date(user.createdAt).toLocaleDateString()
-                          : "Unknown"}
-                      </p>
+                    <div className="bg-base-300/30 border border-base-300 rounded-lg p-2">
+                      <div className="flex justify-between">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <Bell size={16} className="text-base-content/60" />
+                          Mute
+                        </p>
+                        {/* TODO: add original logic */}
+                        <p className="text-sm text-base-content/70 truncate">
+                          <input
+                            type="checkbox"
+                            className="toggle toggle-sm"
+                            checked={isMuted}
+                            onChange={handleToggleMute}
+                          />
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">Bio:</p>
-                      <p className="text-sm text-base-content/70">
-                        {user.bio || "No bio provided"}
-                      </p>
+
+                    <div className="bg-base-300/30 border border-base-300 rounded-lg p-2">
+                      <div className="flex justify-between">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <CalendarDays
+                            size={16}
+                            className="text-base-content/60"
+                          />
+                          Joined
+                        </p>
+                        <p className="text-sm text-base-content/70">
+                          {user.createdAt
+                            ? new Date(user.createdAt).toLocaleDateString()
+                            : "Unknown"}
+                        </p>
+                      </div>
+                      <div className="divider my-1"></div>
+                      <div className="flex justify-between">
+                        <p className="text-sm font-medium flex items-center gap-2">
+                          <Hash size={16} className="text-base-content/60" />
+                          User ID
+                        </p>
+                        <p className="text-sm text-base-content/70 truncate">
+                          {user._id}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -459,7 +560,7 @@ const ChatProfileOpener = ({
                       placeholder="Type to search messages..."
                       value={searchQuery}
                       onChange={(e) => handleSearch(e.target.value)}
-                      className="input input-bordered w-full pr-10"
+                      className="input input-bordered outline-none w-full pr-10"
                     />
                     {searchQuery && (
                       <button
@@ -481,6 +582,7 @@ const ChatProfileOpener = ({
                         {searchResults.map((msg) => (
                           <div
                             key={msg._id}
+                            onClick={() => handleSearchResultClick(msg)}
                             className="p-3 bg-base-200 rounded-lg hover:bg-base-300 cursor-pointer"
                           >
                             <div className="flex items-start gap-2">
@@ -520,29 +622,32 @@ const ChatProfileOpener = ({
 
               {/* Media Tab */}
               {activeTab === "media" && (
-                <div>
-                  <h2 className="text-xl font-bold mb-4">
-                    Media, Links, and Docs
-                  </h2>
+                <div className="relative">
+                  {/* fixed header */}
+                  <div className="">
+                    <h2 className="text-xl font-bold">
+                      Media, Links, and Docs
+                    </h2>
 
-                  {/* Media Type Tabs */}
-                  <div className="tabs tabs-boxed mb-4 flex-nowrap overflow-x-auto">
+                    {/* Media Type Tabs */}
+                  </div>
+                  <div className="sticky top-0 tabs tabs-boxed mb-4 flex-nowrap overflow-x-auto z-1 bg-base-300/50 backdrop-blur-lg rounded-lg p-2.5 flex items-center justify-between">
                     <button
-                      className={`tab ${activeMediaTab === "images" ? "tab-active" : ""}`}
+                      className={`tab ${activeMediaTab === "images" ? "tab-active bg-base-200/50 rounded-lg" : ""}`}
                       onClick={() => setActiveMediaTab("images")}
                     >
                       <Image size={16} className="mr-1" />
                       Images ({mediaFiles.images.length})
                     </button>
                     <button
-                      className={`tab ${activeMediaTab === "videos" ? "tab-active" : ""}`}
+                      className={`tab ${activeMediaTab === "videos" ? "tab-active bg-base-200/50 rounded-lg" : ""}`}
                       onClick={() => setActiveMediaTab("videos")}
                     >
                       <Video size={16} className="mr-1" />
                       Videos ({mediaFiles.videos.length})
                     </button>
                     <button
-                      className={`tab ${activeMediaTab === "docs" ? "tab-active" : ""}`}
+                      className={`tab ${activeMediaTab === "docs" ? "tab-active bg-base-200/50 rounded-lg" : ""}`}
                       onClick={() => setActiveMediaTab("docs")}
                     >
                       <FileText size={16} className="mr-1" />
@@ -550,118 +655,120 @@ const ChatProfileOpener = ({
                     </button>
                   </div>
 
-                  {isLoadingMedia ? (
-                    <div className="text-center py-8">
-                      <span className="loading loading-spinner loading-md"></span>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Images Grid */}
-                      {activeMediaTab === "images" && (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {mediaFiles.images.length > 0 ? (
-                            mediaFiles.images.map((media) => (
-                              <div
-                                key={media._id}
-                                className="aspect-square rounded-lg overflow-hidden cursor-pointer group relative"
-                                onClick={() => setImageModal(media)}
-                              >
-                                <img
-                                  src={media.url}
-                                  alt="Media"
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  <div className="">
+                    {isLoadingMedia ? (
+                      <div className="text-center py-8">
+                        <span className="loading loading-spinner loading-md"></span>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Images Grid */}
+                        {activeMediaTab === "images" && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {mediaFiles.images.length > 0 ? (
+                              mediaFiles.images.map((media) => (
+                                <div
+                                  key={media._id}
+                                  className="aspect-square rounded-lg overflow-hidden cursor-pointer group relative"
+                                  onClick={() => setImageModal(media)}
+                                >
+                                  <img
+                                    src={media.url}
+                                    alt="Media"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                                </div>
+                              ))
+                            ) : (
+                              <div className="col-span-2 sm:col-span-3 text-center py-8 text-base-content/50">
+                                <Image
+                                  size={48}
+                                  className="mx-auto mb-2 opacity-50"
                                 />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                                <p>No images shared yet</p>
                               </div>
-                            ))
-                          ) : (
-                            <div className="col-span-2 sm:col-span-3 text-center py-8 text-base-content/50">
-                              <Image
-                                size={48}
-                                className="mx-auto mb-2 opacity-50"
-                              />
-                              <p>No images shared yet</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            )}
+                          </div>
+                        )}
 
-                      {/* Videos Grid */}
-                      {activeMediaTab === "videos" && (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {mediaFiles.videos.length > 0 ? (
-                            mediaFiles.videos.map((media) => (
-                              <div
-                                key={media._id}
-                                className="aspect-square rounded-lg overflow-hidden cursor-pointer group relative"
-                                onClick={() => setImageModal(media)}
-                              >
-                                <video
-                                  src={media.url}
-                                  className="w-full h-full object-cover"
-                                  preload="metadata"
-                                />
-                                {/* Play button overlay */}
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                                  <div className="w-12 h-12 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-colors">
-                                    <svg
-                                      className="w-6 h-6 text-gray-800 ml-0.5"
-                                      fill="currentColor"
-                                      viewBox="0 0 16 16"
-                                    >
-                                      <path d="M5 3.5v9l7-4.5-7-4.5z" />
-                                    </svg>
+                        {/* Videos Grid */}
+                        {activeMediaTab === "videos" && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {mediaFiles.videos.length > 0 ? (
+                              mediaFiles.videos.map((media) => (
+                                <div
+                                  key={media._id}
+                                  className="aspect-square rounded-lg overflow-hidden cursor-pointer group relative"
+                                  onClick={() => setImageModal(media)}
+                                >
+                                  <video
+                                    src={media.url}
+                                    className="w-full h-full object-cover"
+                                    preload="metadata"
+                                  />
+                                  {/* Play button overlay */}
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                                    <div className="w-12 h-12 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-colors">
+                                      <svg
+                                        className="w-6 h-6 text-gray-800 ml-0.5"
+                                        fill="currentColor"
+                                        viewBox="0 0 16 16"
+                                      >
+                                        <path d="M5 3.5v9l7-4.5-7-4.5z" />
+                                      </svg>
+                                    </div>
                                   </div>
                                 </div>
+                              ))
+                            ) : (
+                              <div className="col-span-2 sm:col-span-3 text-center py-8 text-base-content/50">
+                                <Video
+                                  size={48}
+                                  className="mx-auto mb-2 opacity-50"
+                                />
+                                <p>No videos shared yet</p>
                               </div>
-                            ))
-                          ) : (
-                            <div className="col-span-2 sm:col-span-3 text-center py-8 text-base-content/50">
-                              <Video
-                                size={48}
-                                className="mx-auto mb-2 opacity-50"
-                              />
-                              <p>No videos shared yet</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            )}
+                          </div>
+                        )}
 
-                      {/* Documents List */}
-                      {activeMediaTab === "docs" && (
-                        <div className="space-y-2">
-                          {mediaFiles.docs.length > 0 ? (
-                            mediaFiles.docs.map((media) => (
-                              <div
-                                key={media._id}
-                                className="p-3 bg-base-200 rounded-lg hover:bg-base-300 cursor-pointer flex items-center gap-3"
-                              >
-                                <File size={24} className="text-primary" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">
-                                    Document
-                                  </p>
-                                  <p className="text-xs text-base-content/50">
-                                    {new Date(
-                                      media.createdAt,
-                                    ).toLocaleDateString()}
-                                  </p>
+                        {/* Documents List */}
+                        {activeMediaTab === "docs" && (
+                          <div className="space-y-2">
+                            {mediaFiles.docs.length > 0 ? (
+                              mediaFiles.docs.map((media) => (
+                                <div
+                                  key={media._id}
+                                  className="p-3 bg-base-200 rounded-lg hover:bg-base-300 cursor-pointer flex items-center gap-3"
+                                >
+                                  <File size={24} className="text-primary" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      Document
+                                    </p>
+                                    <p className="text-xs text-base-content/50">
+                                      {new Date(
+                                        media.createdAt,
+                                      ).toLocaleDateString()}
+                                    </p>
+                                  </div>
                                 </div>
+                              ))
+                            ) : (
+                              <div className="text-center py-8 text-base-content/50">
+                                <FileText
+                                  size={48}
+                                  className="mx-auto mb-2 opacity-50"
+                                />
+                                <p>No documents shared yet</p>
                               </div>
-                            ))
-                          ) : (
-                            <div className="text-center py-8 text-base-content/50">
-                              <FileText
-                                size={48}
-                                className="mx-auto mb-2 opacity-50"
-                              />
-                              <p>No documents shared yet</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -670,7 +777,7 @@ const ChatProfileOpener = ({
                 <div>
                   <h2 className="text-xl font-bold mb-4">Export Chat</h2>
                   <div className="space-y-4">
-                    <div className="bg-base-200 p-4 rounded-lg">
+                    <div className="bg-base-200/50 p-4 rounded-lg">
                       <p className="text-sm text-base-content/70 mb-2">
                         Export your chat history with {user.fullName} as a text
                         file.
@@ -716,7 +823,7 @@ const ChatProfileOpener = ({
 
                   {!showClearConfirm ? (
                     <div className="space-y-4">
-                      <div className="bg-base-200 p-4 rounded-lg">
+                      <div className="bg-base-200/50 p-4 rounded-lg">
                         <p className="text-sm text-base-content/70 mb-2">
                           This will delete all messages in this conversation for
                           you only.
@@ -797,15 +904,15 @@ const ChatProfileOpener = ({
 
           {/* done button */}
           <div className="sticky bottom-0 left-0 right-0 backdrop-blur-lg bg-base-200/50 border-t border-base-300 p-3">
-            <div className="flex justify-between sm:justify-end items-center gap-2">
-              <span className="text-sm text-base-content/70 sm:hidden">
+            <div className="flex justify-between items-center gap-2">
+              <span className="text-sm text-primary font-semibold">
                 {activeTab === "contact" && "Contact Info"}
                 {activeTab === "search" && "Search Messages"}
                 {activeTab === "media" && "Media Files"}
                 {activeTab === "export" && "Export Chat"}
                 {activeTab === "clear" && "Clear Chat"}
               </span>
-              <button className="btn btn-xs" onClick={onClose}>
+              <button className="btn btn-xs btn-primary" onClick={onClose}>
                 Done
               </button>
             </div>
