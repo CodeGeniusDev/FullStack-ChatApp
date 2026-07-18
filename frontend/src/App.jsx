@@ -2,85 +2,55 @@ import Navbar from "./components/Navbar";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import ErrorBoundary from "./components/ErrorBoundary";
 
-import Home from "./pages/Home";
-import SignUp from "./pages/Signup";
-import Login from "./pages/Login";
-import Setting from "./pages/Setting";
-import Profile from "./pages/Profile";
-
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/useAuthStore";
 import { useChatStore } from "./store/useChatStore";
 import { useThemeStore } from "./store/useThemeStore";
-import { useEffect, useCallback, useRef } from "react";
+import { lazy, Suspense, useEffect } from "react";
 
 // import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 
+const Home = lazy(() => import("./pages/Home"));
+const SignUp = lazy(() => import("./pages/Signup"));
+const Login = lazy(() => import("./pages/Login"));
+const Setting = lazy(() => import("./pages/Setting"));
+const Profile = lazy(() => import("./pages/Profile"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+const RouteLoader = () => (
+  <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center bg-base-100">
+    <span className="loading loading-spinner loading-lg text-primary" aria-label="Loading page" />
+  </div>
+);
+
 const App = () => {
-  const { authUser, checkAuth, isCheckingAuth, onlineUsers } = useAuthStore();
-  const { initNotifications } = useChatStore();
+  const authUser = useAuthStore((state) => state.authUser);
+  const checkAuth = useAuthStore((state) => state.checkAuth);
+  const isCheckingAuth = useAuthStore((state) => state.isCheckingAuth);
+  const socket = useAuthStore((state) => state.socket);
+  const initNotifications = useChatStore((state) => state.initNotifications);
   const { theme } = useThemeStore();
 
-  // Track render count to detect infinite loops
-  const renderCount = useRef(0);
-  const lastRenderTime = useRef(Date.now());
-
-  renderCount.current += 1;
-  const now = Date.now();
-  const timeSinceLastRender = now - lastRenderTime.current;
-  lastRenderTime.current = now;
-
-  console.log(
-    `🔄 App render #${renderCount.current} (${timeSinceLastRender}ms since last render)`,
-  );
-
-  // Detect infinite render loop
-  // if (renderCount.current > 100) {
-  //   console.error("🚨 INFINITE RENDER LOOP DETECTED! Stopping execution.");
-  //   console.error("Check the following:");
-  //   console.error("1. useEffect dependencies");
-  //   console.error("2. State updates in render");
-  //   console.error("3. Zustand store updates");
-  //   throw new Error("Infinite render loop detected");
-  // }
-
-  console.log({ onlineUsers });
-
-  // CRITICAL FIX: Use a ref to track if checkAuth has been called
-  const hasCheckedAuth = useRef(false);
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   useEffect(() => {
-    // Only run checkAuth ONCE
-    if (!hasCheckedAuth.current) {
-      console.log("✅ Running checkAuth for the first time");
-      hasCheckedAuth.current = true;
-      checkAuth();
+    if (authUser) {
+      useChatStore.setState({ pinnedContacts: authUser.pinnedContacts || [], mutedChats: authUser.mutedChats || [] });
+      initNotifications();
     } else {
-      console.log("⏭️ Skipping checkAuth - already called");
+      useChatStore.getState().resetSession();
     }
-  }, []); // COMPLETELY EMPTY - no dependencies at all
-
-  // Initialize notifications when user is authenticated - run only once per auth change
-  const hasInitNotifications = useRef(false);
-  const lastAuthUserId = useRef(null);
+  }, [authUser, initNotifications]);
 
   useEffect(() => {
-    if (authUser && authUser._id !== lastAuthUserId.current) {
-      if (!hasInitNotifications.current) {
-        console.log("✅ Initializing notifications for user:", authUser._id);
-        hasInitNotifications.current = true;
-        lastAuthUserId.current = authUser._id;
-        initNotifications();
-      }
-    } else if (!authUser) {
-      // Reset when logged out
-      hasInitNotifications.current = false;
-      lastAuthUserId.current = null;
-    }
-  }, [authUser?._id]); // Only depend on user ID
-
-  console.log({ authUser });
+    if (!authUser || !socket) return undefined;
+    const chatStore = useChatStore.getState();
+    chatStore.subscribeToMessages();
+    return () => chatStore.unsubscribeFromMessages();
+  }, [authUser, socket]);
 
   if (isCheckingAuth && !authUser)
     return (
@@ -117,25 +87,28 @@ const App = () => {
       <div data-theme={theme}>
         <Navbar />
 
-        <Routes>
-          <Route
-            path="/"
-            element={authUser ? <Home /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/signup"
-            element={!authUser ? <SignUp /> : <Navigate to="/" />}
-          />
-          <Route
-            path="/login"
-            element={!authUser ? <Login /> : <Navigate to="/" />}
-          />
-          <Route path="/settings" element={<Setting />} />
-          <Route
-            path="/profile"
-            element={authUser ? <Profile /> : <Navigate to="/login" />}
-          />
-        </Routes>
+        <Suspense fallback={<RouteLoader />}>
+          <Routes>
+            <Route
+              path="/"
+              element={authUser ? <Home /> : <Navigate to="/login" />}
+            />
+            <Route
+              path="/signup"
+              element={!authUser ? <SignUp /> : <Navigate to="/" />}
+            />
+            <Route
+              path="/login"
+              element={!authUser ? <Login /> : <Navigate to="/" />}
+            />
+            <Route path="/settings" element={authUser ? <Setting /> : <Navigate to="/login" replace />} />
+            <Route
+              path="/profile"
+              element={authUser ? <Profile /> : <Navigate to="/login" replace />}
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
 
         <Toaster />
 

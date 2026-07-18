@@ -11,16 +11,11 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
-import { useChatStore } from "../store/useChatStore";
-import { useNavigate } from "react-router-dom";
 
 const Navbar = () => {
   const { authUser, logOut } = useAuthStore();
-  const { selectedUser } = useChatStore();
-  const navigate = useNavigate();
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallButton, setShowInstallButton] = useState(false);
-  const [selectedImg, setSelectedImg] = useState(null);
 
   useEffect(() => {
     // Check if already installed
@@ -157,7 +152,7 @@ const Navbar = () => {
                       <div className="w-10 rounded-full border border-gray-500">
                         <img
                           src={
-                            selectedImg || authUser.profilePic || "/avatar.png"
+                            authUser.profilePic || "/avatar.png"
                           }
                           alt="Profile"
                         />

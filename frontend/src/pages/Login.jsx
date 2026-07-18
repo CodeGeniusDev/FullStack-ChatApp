@@ -18,7 +18,7 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="h-screen grid lg:grid-cols-2">
+    <div className="min-h-[100dvh] grid lg:grid-cols-2">
       {/* Left Side - Form */}
       <div className="flex flex-col justify-center items-center bg-base-100 p-6 sm:p-12">
         <div className="w-full max-w-md space-y-8">
@@ -48,6 +48,9 @@ const LoginPage = () => {
                 </div>
                 <input
                   type="email"
+                  name="email"
+                  autoComplete="email"
+                  required
                   className={`input input-bordered outline-none w-full pl-10`}
                   placeholder="you@example.com"
                   value={formData.email}
@@ -68,6 +71,9 @@ const LoginPage = () => {
                 </div>
                 <input
                   type={showPassword ? "text" : "password"}
+                  name="password"
+                  autoComplete="current-password"
+                  required
                   className={`input input-bordered outline-none w-full pl-10`}
                   placeholder="••••••••"
                   value={formData.password}
@@ -79,6 +85,7 @@ const LoginPage = () => {
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-base-content/40" />

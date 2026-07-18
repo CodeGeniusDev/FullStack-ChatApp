@@ -100,10 +100,10 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
-    clients.matchAll({ type: 'window' })
+    self.clients.matchAll({ type: 'window' })
       .then(list => {
         const client = list.find(c => c.url === event.notification.data);
-        return client ? client.focus() : clients.openWindow(event.notification.data);
+        return client ? client.focus() : self.clients.openWindow(event.notification.data);
       })
   );
 });

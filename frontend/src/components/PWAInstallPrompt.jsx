@@ -22,10 +22,12 @@ const PWAInstallPrompt = () => {
       dismissedAt &&
       Date.now() - parseInt(dismissedAt) < 7 * 24 * 60 * 60 * 1000; // 7 days
 
+    let iosTimer;
+    let promptTimer;
     if (!isInstalled && !dismissedRecently) {
       if (iOS) {
         // Show iOS prompt after 3 seconds
-        setTimeout(() => {
+        iosTimer = setTimeout(() => {
           const alreadyInstalled = localStorage.getItem("pwa-installed");
           if (!alreadyInstalled) {
             setShowIOSPrompt(true);
@@ -40,7 +42,7 @@ const PWAInstallPrompt = () => {
       setDeferredPrompt(e);
 
       // Show prompt after 3 seconds
-      setTimeout(() => {
+      promptTimer = setTimeout(() => {
         if (!dismissedRecently) {
           setShowPrompt(true);
         }
@@ -50,18 +52,21 @@ const PWAInstallPrompt = () => {
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     // Listen for app installed
-    window.addEventListener("appinstalled", () => {
-      console.log("PWA installed");
+    const handleAppInstalled = () => {
       setShowPrompt(false);
       setShowIOSPrompt(false);
       localStorage.setItem("pwa-installed", "true");
-    });
+    };
+    window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
       window.removeEventListener(
         "beforeinstallprompt",
         handleBeforeInstallPrompt
       );
+      window.removeEventListener("appinstalled", handleAppInstalled);
+      clearTimeout(iosTimer);
+      clearTimeout(promptTimer);
     };
   }, []);
 
@@ -73,8 +78,6 @@ const PWAInstallPrompt = () => {
 
     // Wait for user response
     const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User response: ${outcome}`);
-
     if (outcome === "accepted") {
       localStorage.setItem("pwa-installed", "true");
     }

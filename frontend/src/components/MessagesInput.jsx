@@ -1,9 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { Image, Send, X, Smile, Paperclip, Mic } from "lucide-react";
 import toast from "react-hot-toast";
 import EmojiPicker from "emoji-picker-react";
 import { compressImage, debounce } from "../lib/utils";
+
+const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
 
 const MessageInput = ({ editingMessage, setEditingMessage }) => {
   const [text, setText] = useState("");
@@ -11,18 +18,43 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   const [mediaPreviews, setMediaPreviews] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
 
-  const { sendMessage, replyingTo, clearReplyingTo, editMessage, setTyping } =
+  const { sendMessage, replyingTo, clearReplyingTo, editMessage, setTyping, isSendingMessage } =
     useChatStore();
 
   const debouncedStopTyping = useRef(
     debounce(() => setTyping(false), 3000),
   ).current;
+
+  const processFiles = useCallback(async (files) => {
+    const validFiles = [];
+    const maxSize = 1.25 * 1024 * 1024;
+
+    for (const file of files) {
+      const supported = file.type.startsWith("image/") || file.type.startsWith("video/") || file.type.startsWith("audio/");
+      if (!supported) { toast.error(`${file.name}: Unsupported file type`); continue; }
+      if (file.size > maxSize) { toast.error(`${file.name}: File too large (max 1.25MB)`); continue; }
+      validFiles.push(file);
+    }
+    if (!validFiles.length) return;
+    setIsUploading(true);
+    toast.loading(`Processing ${validFiles.length} file(s)...`, { id: "process" });
+    try {
+      const previews = [];
+      for (const file of validFiles) {
+        const data = file.type.startsWith("image/") ? await compressImage(file, 1024, 1024, 0.8) : await fileToBase64(file);
+        previews.push({ type: file.type.split("/")[0], data, name: file.name });
+      }
+      setMediaPreviews((previous) => [...previous, ...previews]);
+      toast.success(`${validFiles.length} file(s) ready to send`, { id: "process" });
+    } catch (error) {
+      console.error("File processing error:", error);
+      toast.error("Failed to process some files", { id: "process" });
+    } finally { setIsUploading(false); }
+  }, []);
 
   useEffect(() => {
     if (editingMessage) {
@@ -41,85 +73,13 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
 
     window.addEventListener("dropFiles", handleDropFiles);
     return () => window.removeEventListener("dropFiles", handleDropFiles);
-  }, []);
+  }, [processFiles]);
 
   const handleImageChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     await processFiles(files);
-  };
-
-  const processFiles = async (files) => {
-    const validFiles = [];
-    const maxSize = 10 * 1024 * 1024; // 10MB
-
-    for (const file of files) {
-      // Check file type
-      const isImage = file.type.startsWith("image/");
-      const isVideo = file.type.startsWith("video/");
-      const isAudio = file.type.startsWith("audio/");
-
-      if (!isImage && !isVideo && !isAudio) {
-        toast.error(`${file.name}: Unsupported file type`);
-        continue;
-      }
-
-      // Check file size
-      if (file.size > maxSize) {
-        toast.error(`${file.name}: File too large (max 10MB)`);
-        continue;
-      }
-
-      validFiles.push(file);
-    }
-
-    if (validFiles.length === 0) return;
-
-    setIsUploading(true);
-    toast.loading(`Processing ${validFiles.length} file(s)...`, {
-      id: "process",
-    });
-
-    try {
-      const previews = [];
-
-      for (const file of validFiles) {
-        if (file.type.startsWith("image/")) {
-          const compressedBase64 = await compressImage(file, 1024, 1024, 0.8);
-          previews.push({
-            type: "image",
-            data: compressedBase64,
-            name: file.name,
-          });
-        } else if (file.type.startsWith("video/")) {
-          const base64 = await fileToBase64(file);
-          previews.push({ type: "video", data: base64, name: file.name });
-        } else if (file.type.startsWith("audio/")) {
-          const base64 = await fileToBase64(file);
-          previews.push({ type: "audio", data: base64, name: file.name });
-        }
-      }
-
-      setMediaPreviews((prev) => [...prev, ...previews]);
-      toast.success(`${validFiles.length} file(s) ready to send`, {
-        id: "process",
-      });
-    } catch (error) {
-      console.error("File processing error:", error);
-      toast.error("Failed to process some files", { id: "process" });
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
   };
 
   const removeMedia = (index) => {
@@ -136,15 +96,11 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
   };
 
   const handleDragLeave = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.target === e.currentTarget) {
-      setIsDragging(false);
-    }
   };
 
   const handleDragOver = (e) => {
@@ -155,7 +111,6 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   const handleDrop = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
@@ -193,6 +148,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
       textareaRef.current.style.height = "auto";
     }
 
+    let successful = true;
     try {
       if (editingMessage) {
         await editMessage(editingMessage._id, messageText);
@@ -214,18 +170,23 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
               payload.audio = media.data;
             }
 
-            await sendMessage(payload);
+            successful = (await sendMessage(payload)) && successful;
           }
           // Send text separately if multiple media
           if (messageMedia.length > 1 && messageText) {
-            await sendMessage({ text: messageText });
+            successful = (await sendMessage({ text: messageText })) && successful;
           }
         } else {
-          await sendMessage({
+          successful = await sendMessage({
             text: messageText,
             image: messageImage,
           });
         }
+      }
+      if (!successful) {
+        setText(messageText);
+        setImagePreview(messageImage);
+        setMediaPreviews(messageMedia);
       }
     } catch (error) {
       console.error("Failed to send/edit message:", error);
@@ -236,7 +197,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
     }
   };
 
-  const handleEmojiClick = (emojiData, event) => {
+  const handleEmojiClick = (emojiData) => {
     setText((prev) => prev + emojiData.emoji);
     textareaRef.current?.focus();
   };
@@ -276,7 +237,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   return (
     <div className="sticky bottom-0 left-0 right-0 lg:static z-10">
       <div
-        className="p-3 w-full border-t border-base-300 backdrop-blur-lg bg-base-100/80 relative shadow-lg lg:shadow-none"
+        className="px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] w-full border-t border-base-300 backdrop-blur-lg bg-base-100/80 relative shadow-lg lg:shadow-none"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -505,11 +466,11 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
               data-tip="Send"
               disabled={
                 (!text.trim() && !imagePreview && mediaPreviews.length === 0) ||
-                isUploading
+                isUploading || isSendingMessage
               }
               title="Send message"
             >
-              <Send size={20} />
+              {isSendingMessage ? <span className="loading loading-spinner loading-sm" /> : <Send size={20} />}
             </button>
           ) : (
             <button

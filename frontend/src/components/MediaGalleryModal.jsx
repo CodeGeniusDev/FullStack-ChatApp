@@ -77,7 +77,7 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
     isVideo = !!currentMessage?.video;
     mediaSrc = currentMessage?.video || currentMessage?.image || "/avatar.png";
     // Ensure the media path is absolute
-    if (mediaSrc && !mediaSrc.startsWith('http') && !mediaSrc.startsWith('/')) {
+    if (mediaSrc && !mediaSrc.startsWith("http") && !mediaSrc.startsWith("/")) {
       mediaSrc = `/${mediaSrc}`;
     }
     mediaAlt = isVideo ? "Chat video" : "Chat image";
@@ -377,7 +377,7 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
         {/* Thumbnail Navigation (for multiple media) */}
         {hasMultipleMedia && mediaMessages.length > 1 && (
           <div
-            className={`absolute top-0 left-1/2 -translate-x-1/2 flex gap-2 p-2 bg-black/60 backdrop-blur-md  transition-opacity duration-300 ${
+            className={`fixed bottom-4 sm:bottom-auto sm:top-0 left-1/2 -translate-x-1/2 flex gap-2 p-2 bg-black/60 backdrop-blur-md rounded-lg transition-opacity duration-300 ${
               isVideo && !showControls && isPlaying
                 ? "opacity-0 pointer-events-none"
                 : "opacity-100"
@@ -435,6 +435,7 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
           </div>
         )}
 
+        {/* Header Buttons */}
         <div className="flex gap-1">
           <button
             onClick={handleStar}
@@ -472,7 +473,7 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
 
       {/* Media Content */}
       <div
-        className="flex-1 flex items-center justify-center p-4 pt-20 pb-24 relative"
+        className="flex-1 flex items-center bg-amber-200 justify-center p-4 pt-20 pb-24 relative"
         onClick={(e) => {
           e.stopPropagation();
           if (isVideo) {
@@ -504,12 +505,13 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
           </button>
         )}
 
+        {/* TODO: Update this section */}
         {/* Image Display */}
         {!isVideo && (
           <img
             src={mediaSrc}
             alt={mediaAlt}
-            className="max-w-full max-h-[85vh] object-contain transition-transform select-none"
+            className="max-w-full sm:max-h-[80vh] max-h-[70vh] rounded-md object-contain transition-transform select-none"
             style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }}
             onLoad={() => setIsLoading(false)}
             onError={() => setError("Failed to load media")}
@@ -570,7 +572,7 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
       {/* Controls - Image Controls */}
       {!isVideo && (
         <div
-          className="absolute bottom-0 left-0 right-0 h-16 flex items-center justify-center gap-4 bg-gradient-to-t from-black/70 to-transparent text-white"
+          className="absolute sm:flex hidden bottom-0 left-0 right-0 h-16 flex items-center justify-center gap-4 bg-gradient-to-t from-black/70 to-transparent text-white"
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -619,7 +621,7 @@ const MediaGalleryModal = ({ user, message, onClose, allMessages = [] }) => {
       {/* Controls - Video Controls (WhatsApp Style) */}
       {isVideo && (
         <div
-          className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent text-white transition-all duration-300 ${
+          className={`absolute bottom-20 sm:bottom-0 left-0 right-0 bg-linear-to-t from-black/90 via-black/70 to-transparent text-white transition-all duration-300 ${
             !showControls && isPlaying
               ? "opacity-0 translate-y-full pointer-events-none"
               : "opacity-100 translate-y-0"

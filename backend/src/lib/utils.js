@@ -1,17 +1,30 @@
 import jwt from "jsonwebtoken";
 
-export const generateToken = (userId, res) => {
-  const token = jwt.sign({ userId }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
-  });
-
-  res.cookie("token", token, {
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+export const getCookieOptions = () => {
+  const isProduction = process.env.NODE_ENV === "production";
+  return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production", // true in production
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" for cross-origin in production
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
-  });
+  };
+};
 
+export const generateToken = (userId, res) => {
+  const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
+  const token = jwt.sign({ userId: userId.toString() }, process.env.JWT_SECRET, { expiresIn });
+  res.cookie("token", token, {
+    ...getCookieOptions(),
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
   return token;
 };
+
+export const clearTokenCookie = (res) => res.clearCookie("token", getCookieOptions());
+
+export const parseCookieHeader = (header = "") => Object.fromEntries(
+  header.split(";").map((part) => part.trim()).filter(Boolean).map((part) => {
+    const separator = part.indexOf("=");
+    return separator === -1 ? [part, ""] : [part.slice(0, separator), decodeURIComponent(part.slice(separator + 1))];
+  }),
+);

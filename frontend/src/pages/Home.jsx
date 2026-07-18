@@ -1,5 +1,4 @@
 import { useChatStore } from "../store/useChatStore";
-import { useEffect } from "react";
 
 import Sidebar from "../components/Sidebar.jsx";
 import NoChatSelected from "../components/NoChatSelected.jsx";
@@ -9,7 +8,7 @@ const HomePage = () => {
   const { selectedUser } = useChatStore();
 
   return (
-    <div className="relative h-screen overflow-hidden">
+    <div className="relative h-[100dvh] overflow-hidden">
       {/* Background */}
       {/* <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.1]"
@@ -20,7 +19,7 @@ const HomePage = () => {
 
       {/* Main Container */}
       <div className="flex items-center justify-center lg:pt-20 pt-15 px-0 lg:px-4 z-20 border-t-2 border-base-300">
-        <div className="bg-base-100 rounded-none lg:rounded-box shadow-cl w-full h-[calc(100vh-3.8rem)] lg:h-[calc(100vh-6rem)] border-0 lg:border-2 border-base-300">
+        <div className="bg-base-100 rounded-none lg:rounded-box shadow-cl w-full h-[calc(100dvh-3.8rem)] lg:h-[calc(100dvh-6rem)] border-0 lg:border-2 border-base-300">
           <div className="flex h-full rounded-none lg:rounded-box overflow-hidden">
             {/* Sidebar - Hidden on mobile when chat is selected */}
             <div

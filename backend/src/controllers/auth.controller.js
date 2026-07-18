@@ -1,14 +1,21 @@
-import { generateToken } from "../lib/utils.js";
+import { clearTokenCookie, generateToken } from "../lib/utils.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
+import mongoose from "mongoose";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const signup = async (req, res) => {
-  const { fullName, email, password } = req.body;
+  const fullName = typeof req.body.fullName === "string" ? req.body.fullName.trim() : "";
+  const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  const password = typeof req.body.password === "string" ? req.body.password : "";
   try {
     if (!fullName || !email || !password) {
       return res.status(400).json({ message: "All fields are required" });
     }
+    if (fullName.length < 2 || fullName.length > 80) return res.status(400).json({ message: "Full name must be between 2 and 80 characters" });
+    if (!EMAIL_PATTERN.test(email) || email.length > 254) return res.status(400).json({ message: "Enter a valid email address" });
 
     if (password.length < 6) {
       return res
@@ -16,7 +23,7 @@ export const signup = async (req, res) => {
         .json({ message: "Password must be at least 6 characters" });
     }
     const user = await User.findOne({ email });
-    if (user) return res.status(400).json({ message: "Email already exists" });
+    if (user) return res.status(409).json({ message: "Email already exists" });
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     const newUser = new User({
@@ -26,8 +33,8 @@ export const signup = async (req, res) => {
     });
 
     if (newUser) {
-      generateToken(newUser._id, res);
       await newUser.save();
+      generateToken(newUser._id, res);
 
       res.status(201).json({
         _id: newUser._id,
@@ -41,21 +48,23 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "User not created" });
     }
   } catch (error) {
-    console.log(error);
+    console.error("Signup failed:", error.name);
+    if (error?.code === 11000) return res.status(409).json({ message: "Email already exists" });
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
 export const login = async (req, res) => {
-  const { email, password } = req.body;
+  const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  const password = typeof req.body.password === "string" ? req.body.password : "";
 
   try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "User not found" });
+    const user = await User.findOne({ email }).select("+password");
+    if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(401).json({ message: "Invalid credentials" });
 
     generateToken(user._id, res);
 
@@ -69,23 +78,17 @@ export const login = async (req, res) => {
       message: "User logged in successfully",
     });
   } catch (error) {
-    console.log(error);
+    console.error("Login failed:", error.name);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
 export const logout = (req, res) => {
   try {
-    res.cookie("token", "", {
-      maxAge: 0,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-      expires: new Date(0),
-    });
+    clearTokenCookie(res);
     return res.status(200).json({ message: "User logged out successfully" });
   } catch (error) {
-    console.log(error);
+    console.error("Logout failed:", error.name);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -98,13 +101,14 @@ export const updateProfile = async (req, res) => {
     const updateData = {};
 
     // Update name if provided
-    if (fullName && fullName.trim()) {
+    if (fullName !== undefined) {
+      if (typeof fullName !== "string" || fullName.trim().length < 2 || fullName.trim().length > 80) return res.status(400).json({ message: "Full name must be between 2 and 80 characters" });
       updateData.fullName = fullName.trim();
     }
 
     // Update bio if provided
     if (bio !== undefined) {
-      if (bio.length > 150) {
+      if (typeof bio !== "string" || bio.length > 150) {
         return res
           .status(400)
           .json({ message: "Bio must be 150 characters or less" });
@@ -116,7 +120,7 @@ export const updateProfile = async (req, res) => {
     if (
       profilePic &&
       typeof profilePic === "string" &&
-      profilePic.startsWith("data:image")
+      /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(profilePic)
     ) {
       try {
         const uploadResponse = await cloudinary.uploader.upload(profilePic, {
@@ -130,10 +134,9 @@ export const updateProfile = async (req, res) => {
 
         updateData.profilePic = uploadResponse.secure_url;
       } catch (uploadError) {
-        console.error("Cloudinary upload error:", uploadError);
+        console.error("Cloudinary upload failed:", uploadError.name);
         return res.status(500).json({
           message: "Failed to upload image to Cloudinary",
-          error: uploadError.message,
         });
       }
     }
@@ -153,10 +156,9 @@ export const updateProfile = async (req, res) => {
 
     res.status(200).json(updatedUser);
   } catch (error) {
-    console.error("Error in updateProfile:", error);
+    console.error("Profile update failed:", error.name);
     return res.status(500).json({
       message: "Internal Server Error",
-      error: error.message,
     });
   }
 };
@@ -181,7 +183,7 @@ export const checkAuth = (req, res) => {
     };
     res.status(200).json(userData);
   } catch (error) {
-    console.log("Error in checkAuth controller", error.message);
+    console.error("Auth check failed:", error.name);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -192,7 +194,7 @@ export const togglePinContact = async (req, res) => {
     const { contactId } = req.body;
     const userId = req.user._id;
 
-    if (!contactId) {
+    if (!mongoose.isValidObjectId(contactId)) {
       return res.status(400).json({ message: "Contact ID is required" });
     }
 
@@ -201,13 +203,12 @@ export const togglePinContact = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const isPinned = user.pinnedContacts.includes(contactId);
+    if (contactId === userId.toString() || !(await User.exists({ _id: contactId }))) return res.status(400).json({ message: "Invalid contact" });
+    const isPinned = user.pinnedContacts.some((id) => id.toString() === contactId);
 
     if (isPinned) {
       // Unpin
-      user.pinnedContacts = user.pinnedContacts.filter(
-        (id) => id !== contactId
-      );
+      user.pinnedContacts = user.pinnedContacts.filter((id) => id.toString() !== contactId);
     } else {
       // Pin
       user.pinnedContacts.push(contactId);
@@ -217,23 +218,14 @@ export const togglePinContact = async (req, res) => {
 
     // Emit socket event to sync across devices
     const io = req.app.get("io");
-    const userSocketMap = req.app.get("userSocketMap");
-    
-    // Get all socket connections for this user
-    Object.entries(userSocketMap).forEach(([uid, socketId]) => {
-      if (uid === userId.toString()) {
-        io.to(socketId).emit("pinnedContactsUpdated", {
-          pinnedContacts: user.pinnedContacts,
-        });
-      }
-    });
+    io.to(`user:${userId}`).emit("pinnedContactsUpdated", { pinnedContacts: user.pinnedContacts });
 
     res.status(200).json({
       pinnedContacts: user.pinnedContacts,
       message: isPinned ? "Contact unpinned" : "Contact pinned",
     });
   } catch (error) {
-    console.error("Error in togglePinContact:", error);
+    console.error("Pin update failed:", error.name);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -244,7 +236,7 @@ export const toggleMuteChat = async (req, res) => {
     const { chatId } = req.body;
     const userId = req.user._id;
 
-    if (!chatId) {
+    if (!mongoose.isValidObjectId(chatId)) {
       return res.status(400).json({ message: "Chat ID is required" });
     }
 
@@ -253,11 +245,12 @@ export const toggleMuteChat = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const isMuted = user.mutedChats.includes(chatId);
+    if (chatId === userId.toString() || !(await User.exists({ _id: chatId }))) return res.status(400).json({ message: "Invalid chat" });
+    const isMuted = user.mutedChats.some((id) => id.toString() === chatId);
 
     if (isMuted) {
       // Unmute
-      user.mutedChats = user.mutedChats.filter((id) => id !== chatId);
+      user.mutedChats = user.mutedChats.filter((id) => id.toString() !== chatId);
     } else {
       // Mute
       user.mutedChats.push(chatId);
@@ -267,23 +260,14 @@ export const toggleMuteChat = async (req, res) => {
 
     // Emit socket event to sync across devices
     const io = req.app.get("io");
-    const userSocketMap = req.app.get("userSocketMap");
-    
-    // Get all socket connections for this user
-    Object.entries(userSocketMap).forEach(([uid, socketId]) => {
-      if (uid === userId.toString()) {
-        io.to(socketId).emit("mutedChatsUpdated", {
-          mutedChats: user.mutedChats,
-        });
-      }
-    });
+    io.to(`user:${userId}`).emit("mutedChatsUpdated", { mutedChats: user.mutedChats });
 
     res.status(200).json({
       mutedChats: user.mutedChats,
       message: isMuted ? "Chat unmuted" : "Chat muted",
     });
   } catch (error) {
-    console.error("Error in toggleMuteChat:", error);
+    console.error("Mute update failed:", error.name);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };

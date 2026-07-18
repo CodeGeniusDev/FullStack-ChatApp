@@ -8,6 +8,22 @@ import {
   playNotificationSound,
 } from "../lib/notifications";
 
+let messageRequestId = 0;
+let messageAbortController = null;
+let usersPromise = null;
+let unreadPromise = null;
+let socketHandlers = null;
+const typingClearTimers = new Map();
+const entityId = (value) => (typeof value === "object" ? value?._id : value);
+const mergeUniqueMessages = (messages) => {
+  const seen = new Set();
+  return messages.filter((message) => {
+    if (!message?._id || seen.has(message._id)) return false;
+    seen.add(message._id);
+    return true;
+  });
+};
+
 export const useChatStore = create((set, get) => ({
   messages: [],
   users: [],
@@ -24,6 +40,15 @@ export const useChatStore = create((set, get) => ({
   currentPage: 1,
   hasMoreMessages: false,
   isLoadingMore: false,
+  isSendingMessage: false,
+  resetSession: () => {
+    const timeout = get().typingTimeout;
+    if (timeout) clearTimeout(timeout);
+    typingClearTimers.forEach(clearTimeout);
+    typingClearTimers.clear();
+    messageRequestId += 1;
+    set({ messages: [], users: [], selectedUser: null, unreadCounts: {}, replyingTo: null, typingUsers: {}, pinnedContacts: [], mutedChats: [], currentPage: 1, hasMoreMessages: false, isLoadingMore: false, isSendingMessage: false, typingTimeout: null });
+  },
 
   // Initialize notifications
   initNotifications: async () => {
@@ -33,6 +58,8 @@ export const useChatStore = create((set, get) => ({
   },
 
   getUsers: async () => {
+    if (usersPromise) return usersPromise;
+    usersPromise = (async () => {
     set({ isUsersLoading: true });
     try {
       const res = await axiosInstance.get("/messages/user");
@@ -43,7 +70,10 @@ export const useChatStore = create((set, get) => ({
       set({ users: [] });
     } finally {
       set({ isUsersLoading: false });
+      usersPromise = null;
     }
+    })();
+    return usersPromise;
   },
 
   // Update user's last message locally without full reload
@@ -78,37 +108,44 @@ export const useChatStore = create((set, get) => ({
   },
 
   getMessages: async (userId) => {
-    set({ isMessagesLoading: true, currentPage: 1 });
+    const requestId = ++messageRequestId;
+    messageAbortController?.abort();
+    messageAbortController = new AbortController();
+    const { signal } = messageAbortController;
+    set({ isMessagesLoading: true, currentPage: 1, messages: [] });
     try {
       if (!userId) {
         throw new Error("No user ID provided");
       }
       const res = await axiosInstance.get(
-        `/messages/user/${userId}?page=1&limit=50`,
+        `/messages/user/${userId}?page=1&limit=50`, { signal },
       );
 
+      if (requestId !== messageRequestId || get().selectedUser?._id !== userId) return;
       set({
-        messages: res.data.messages || [],
+        messages: mergeUniqueMessages(res.data.messages || []),
         hasMoreMessages: res.data.pagination?.hasMore || false,
         currentPage: 1,
       });
 
       // Mark messages as read
-      await get().markMessagesAsRead(userId);
+      void get().markMessagesAsRead(userId);
     } catch (error) {
+      if (error.code === "ERR_CANCELED") return;
       console.error("Error fetching messages:", error);
       toast.error(error.response?.data?.message || "Failed to load messages");
-      set({ messages: [] });
+      if (requestId === messageRequestId) set({ messages: [] });
     } finally {
-      set({ isMessagesLoading: false });
+      if (requestId === messageRequestId) set({ isMessagesLoading: false });
     }
   },
 
   // Load more messages (pagination)
   loadMoreMessages: async (userId) => {
-    const { currentPage, hasMoreMessages, isLoadingMore } = get();
+    const { currentPage, hasMoreMessages, isLoadingMore, selectedUser } = get();
 
-    if (!hasMoreMessages || isLoadingMore) return;
+    if (!hasMoreMessages || isLoadingMore || selectedUser?._id !== userId) return;
+    const requestId = messageRequestId;
 
     set({ isLoadingMore: true });
     try {
@@ -119,8 +156,9 @@ export const useChatStore = create((set, get) => ({
 
       const olderMessages = res.data.messages || [];
 
+      if (requestId !== messageRequestId || get().selectedUser?._id !== userId) return;
       set((state) => ({
-        messages: [...olderMessages, ...state.messages],
+        messages: mergeUniqueMessages([...olderMessages, ...state.messages]),
         currentPage: nextPage,
         hasMoreMessages: res.data.pagination?.hasMore || false,
         isLoadingMore: false,
@@ -133,17 +171,18 @@ export const useChatStore = create((set, get) => ({
   },
 
   sendMessage: async (messageData) => {
-    const { selectedUser, messages, replyingTo } = get();
+    const { selectedUser, messages, replyingTo, isSendingMessage } = get();
     if (!selectedUser) {
       toast.error("No user selected");
-      return;
+      return false;
     }
+    if (isSendingMessage) return false;
 
     const authUser = useAuthStore.getState().authUser;
 
     // Create optimistic message for instant UI update
     const optimisticMessage = {
-      _id: `temp-${Date.now()}`,
+      _id: `temp-${crypto.randomUUID()}`,
       text: messageData.text,
       image: messageData.image,
       video: messageData.video,
@@ -166,7 +205,7 @@ export const useChatStore = create((set, get) => ({
     };
 
     // Instantly add to UI and update sidebar
-    set({ messages: [...messages, optimisticMessage], replyingTo: null });
+    set((state) => ({ messages: [...state.messages, optimisticMessage], replyingTo: null, isSendingMessage: true }));
 
     // Immediately update sidebar with optimistic message
     get().updateUserLastMessage(selectedUser._id, {
@@ -197,11 +236,7 @@ export const useChatStore = create((set, get) => ({
       );
 
       // Replace optimistic message with real one
-      set({
-        messages: get().messages.map((msg) =>
-          msg._id === optimisticMessage._id ? res.data : msg,
-        ),
-      });
+      set((state) => ({ messages: mergeUniqueMessages(state.messages.map((msg) => msg._id === optimisticMessage._id ? res.data : msg)) }));
 
       // Update sidebar with real message data
       get().updateUserLastMessage(selectedUser._id, {
@@ -212,6 +247,7 @@ export const useChatStore = create((set, get) => ({
         createdAt: res.data.createdAt,
         senderId: res.data.senderId._id,
       });
+      return true;
     } catch (error) {
       console.error("Error sending message:", error);
 
@@ -234,6 +270,9 @@ export const useChatStore = create((set, get) => ({
       }
 
       toast.error(error.response?.data?.message || "Failed to send message");
+      return false;
+    } finally {
+      set({ isSendingMessage: false });
     }
   },
 
@@ -270,7 +309,19 @@ export const useChatStore = create((set, get) => ({
       get().getUsers();
     } catch (error) {
       console.error("Error deleting message:", error);
-      toast.error(error.response?.data?.error || "Failed to delete message");
+      toast.error(error.response?.data?.message || "Failed to delete message");
+    }
+  },
+
+  clearChat: async (userId) => {
+    try {
+      await axiosInstance.delete(`/messages/clear/${userId}`);
+      set({ messages: [], replyingTo: null });
+      await get().getUsers();
+      return true;
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to clear chat");
+      return false;
     }
   },
 
@@ -303,7 +354,7 @@ export const useChatStore = create((set, get) => ({
       }
     } catch (error) {
       console.error("Error editing message:", error);
-      toast.error(error.response?.data?.error || "Failed to edit message");
+      toast.error(error.response?.data?.message || "Failed to edit message");
     }
   },
 
@@ -342,7 +393,6 @@ export const useChatStore = create((set, get) => ({
 
   removeReaction: async (messageId, emoji) => {
     try {
-      const { authUser } = useAuthStore.getState();
       const res = await axiosInstance.delete(
         `/messages/reaction/${messageId}`,
         {
@@ -365,6 +415,8 @@ export const useChatStore = create((set, get) => ({
   },
 
   getUnreadCounts: async () => {
+    if (unreadPromise) return unreadPromise;
+    unreadPromise = (async () => {
     try {
       const res = await axiosInstance.get("/messages/unread/count");
       const counts = {};
@@ -374,7 +426,11 @@ export const useChatStore = create((set, get) => ({
       set({ unreadCounts: counts });
     } catch (error) {
       console.error("Error fetching unread counts:", error);
+    } finally {
+      unreadPromise = null;
     }
+    })();
+    return unreadPromise;
   },
 
   setReplyingTo: (message) => set({ replyingTo: message }),
@@ -412,26 +468,13 @@ export const useChatStore = create((set, get) => ({
   },
 
   subscribeToMessages: () => {
-    const { selectedUser } = get();
-    if (!selectedUser) return;
-
     const socket = useAuthStore.getState().socket;
     if (!socket) return;
 
-    // Remove any existing listeners first
-    socket.off("newMessage");
-    socket.off("messagesDelivered");
-    socket.off("messagesRead");
-    socket.off("messageDeleted");
-    socket.off("messageEdited");
-    socket.off("reactionAdded");
-    socket.off("reactionRemoved");
-    socket.off("userTyping");
-    socket.off("pinnedContactsUpdated");
-    socket.off("mutedChatsUpdated");
+    get().unsubscribeFromMessages();
 
     // New message
-    socket.on("newMessage", (newMessage) => {
+    const handleNewMessage = (newMessage) => {
       const { selectedUser: currentSelectedUser, notificationsEnabled } = get();
       const isMessageFromSelectedUser =
         newMessage.senderId._id === currentSelectedUser?._id;
@@ -485,55 +528,61 @@ export const useChatStore = create((set, get) => ({
       }
 
       // Add message to chat if it's from the selected user
-      set({
-        messages: [...get().messages, newMessage],
-      });
+      set((state) => ({ messages: mergeUniqueMessages([...state.messages, newMessage]) }));
 
       // Auto mark as read
       get().markMessagesAsRead(currentSelectedUser._id);
-    });
+    };
+
+    const handleMessageSent = (sentMessage) => {
+      const receiverId = entityId(sentMessage.receiverId);
+      get().updateUserLastMessage(receiverId, sentMessage);
+      if (get().selectedUser?._id === receiverId) {
+        set((state) => ({ messages: mergeUniqueMessages([...state.messages, sentMessage]) }));
+      }
+    };
 
     // Message delivered
-    socket.on("messagesDelivered", ({ userId }) => {
+    const handleMessagesDelivered = ({ userId }) => {
       set({
         messages: get().messages.map((msg) =>
-          msg.receiverId._id === userId && msg.status === "sent"
+          entityId(msg.receiverId) === userId && msg.status === "sent"
             ? { ...msg, status: "delivered" }
             : msg,
         ),
       });
-    });
+    };
 
     // Message read
-    socket.on("messagesRead", ({ userId }) => {
+    const handleMessagesRead = ({ userId }) => {
       set({
         messages: get().messages.map((msg) =>
-          msg.receiverId._id === userId ? { ...msg, status: "read" } : msg,
+          entityId(msg.receiverId) === userId ? { ...msg, status: "read" } : msg,
         ),
       });
-    });
+    };
 
     // Message deleted
-    socket.on("messageDeleted", ({ messageId, deleteForEveryone }) => {
+    const handleMessageDeleted = ({ messageId, deleteForEveryone }) => {
       if (deleteForEveryone) {
         set({
           messages: get().messages.filter((msg) => msg._id !== messageId),
         });
         get().getUsers();
       }
-    });
+    };
 
     // Message edited
-    socket.on("messageEdited", (editedMessage) => {
+    const handleMessageEdited = (editedMessage) => {
       set({
         messages: get().messages.map((msg) =>
           msg._id === editedMessage._id ? editedMessage : msg,
         ),
       });
-    });
+    };
 
     // Reaction added
-    socket.on("reactionAdded", ({ messageId, reactions }) => {
+    const handleReactionAdded = ({ messageId, reactions }) => {
       const { authUser } = useAuthStore.getState();
 
       // Update reactions with the current user's profile picture if it's their reaction
@@ -556,19 +605,19 @@ export const useChatStore = create((set, get) => ({
           msg._id === messageId ? { ...msg, reactions: updatedReactions } : msg,
         ),
       });
-    });
+    };
 
     // Reaction removed
-    socket.on("reactionRemoved", ({ messageId, reactions }) => {
+    const handleReactionRemoved = ({ messageId, reactions }) => {
       set({
         messages: get().messages.map((msg) =>
           msg._id === messageId ? { ...msg, reactions: reactions } : msg,
         ),
       });
-    });
+    };
 
     // Typing indicator
-    socket.on("userTyping", ({ senderId, isTyping }) => {
+    const handleUserTyping = ({ senderId, isTyping }) => {
       set({
         typingUsers: {
           ...get().typingUsers,
@@ -578,50 +627,48 @@ export const useChatStore = create((set, get) => ({
       
       // Auto-clear typing indicator after 3.5 seconds
       if (isTyping) {
-        setTimeout(() => {
+        clearTimeout(typingClearTimers.get(senderId));
+        const timer = setTimeout(() => {
           set({
             typingUsers: {
               ...get().typingUsers,
               [senderId]: false,
             },
           });
+          typingClearTimers.delete(senderId);
         }, 3500);
+        typingClearTimers.set(senderId, timer);
       }
-    });
+    };
 
     // Pinned contacts updated (sync across devices)
-    socket.on("pinnedContactsUpdated", ({ pinnedContacts }) => {
+    const handlePinnedContactsUpdated = ({ pinnedContacts }) => {
       set({ pinnedContacts });
-    });
+    };
 
     // Muted chats updated (sync across devices)
-    socket.on("mutedChatsUpdated", ({ mutedChats }) => {
+    const handleMutedChatsUpdated = ({ mutedChats }) => {
       set({ mutedChats });
-    });
+    };
+    socketHandlers = { newMessage: handleNewMessage, messageSent: handleMessageSent, messagesDelivered: handleMessagesDelivered, messagesRead: handleMessagesRead, messageDeleted: handleMessageDeleted, messageEdited: handleMessageEdited, reactionAdded: handleReactionAdded, reactionRemoved: handleReactionRemoved, userTyping: handleUserTyping, pinnedContactsUpdated: handlePinnedContactsUpdated, mutedChatsUpdated: handleMutedChatsUpdated };
+    Object.entries(socketHandlers).forEach(([event, handler]) => socket.on(event, handler));
   },
 
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
-    if (socket) {
-      socket.off("newMessage");
-      socket.off("messagesDelivered");
-      socket.off("messagesRead");
-      socket.off("messageDeleted");
-      socket.off("messageEdited");
-      socket.off("reactionAdded");
-      socket.off("reactionRemoved");
-      socket.off("userTyping");
-      socket.off("pinnedContactsUpdated");
-      socket.off("mutedChatsUpdated");
-    }
+    if (socket && socketHandlers) Object.entries(socketHandlers).forEach(([event, handler]) => socket.off(event, handler));
+    socketHandlers = null;
   },
 
   setSelectedUser: (user) => {
-    set({ selectedUser: user, replyingTo: null, currentPage: 1 });
+    messageRequestId += 1;
+    messageAbortController?.abort();
+    set({ selectedUser: user, messages: [], replyingTo: null, currentPage: 1, hasMoreMessages: false, isMessagesLoading: false });
   },
 
   // Pin/unpin contacts
   togglePinContact: async (userId) => {
+    const previous = get().pinnedContacts;
     try {
       // Optimistically update UI
       set((state) => {
@@ -643,17 +690,13 @@ export const useChatStore = create((set, get) => ({
       console.error("Error toggling pin:", error);
       toast.error("Failed to update pin status");
       // Revert on error
-      get().loadPinnedContacts();
+      set({ pinnedContacts: previous });
     }
-  },
-
-  loadPinnedContacts: () => {
-    // Pinned contacts are now loaded from server via checkAuth
-    // This function is kept for compatibility but does nothing
   },
 
   // Mute/unmute chats
   toggleMuteChat: async (userId) => {
+    const previous = get().mutedChats;
     try {
       // Optimistically update UI
       set((state) => {
@@ -675,12 +718,8 @@ export const useChatStore = create((set, get) => ({
       console.error("Error toggling mute:", error);
       toast.error("Failed to update mute status");
       // Revert on error
-      get().loadMutedChats();
+      set({ mutedChats: previous });
     }
   },
 
-  loadMutedChats: () => {
-    // Muted chats are now loaded from server via checkAuth
-    // This function is kept for compatibility but does nothing
-  },
 }));

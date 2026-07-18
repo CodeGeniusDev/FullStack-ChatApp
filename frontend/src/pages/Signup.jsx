@@ -45,7 +45,7 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <div className="min-h-[100dvh] grid lg:grid-cols-2">
       {/* left side */}
       <div className="flex flex-col justify-center items-center p-6 sm:p-12">
         <div className="w-full max-w-md space-y-8">
@@ -85,6 +85,10 @@ const Signup = () => {
                     setFormData({ ...formData, fullName: e.target.value })
                   }
                   aria-label="Full name"
+                  autoComplete="name"
+                  minLength={2}
+                  maxLength={80}
+                  required
                 />
               </div>
             </div>
@@ -111,6 +115,8 @@ const Signup = () => {
                     setFormData({ ...formData, email: e.target.value })
                   }
                   aria-label="Email"
+                  autoComplete="email"
+                  required
                 />
               </div>
             </div>
@@ -137,11 +143,15 @@ const Signup = () => {
                     setFormData({ ...formData, password: e.target.value })
                   }
                   aria-label="Password"
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <EyeOff className="size-5 text-base-content/40" />

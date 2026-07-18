@@ -16,7 +16,6 @@ const ChatHeader = () => {
     // Ensure the profile tab is active when opening
     setActiveTab("contact");
     e.stopPropagation();
-    console.log("Opening profile...");
     setIsProfileOpen(true);
     // Close the dropdown
     document.activeElement?.blur();

@@ -21,15 +21,12 @@ const Sidebar = () => {
     getUsers,
     selectedUser,
     setSelectedUser,
-    isUsersLoading,
     unreadCounts,
     getUnreadCounts,
     pinnedContacts,
     mutedChats,
     togglePinContact,
     toggleMuteChat,
-    loadPinnedContacts,
-    loadMutedChats,
   } = useChatStore();
 
   const { onlineUsers } = useAuthStore();
@@ -39,7 +36,6 @@ const Sidebar = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [, forceUpdate] = useState({}); // Force re-render trigger
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window !== "undefined") {
       const savedWidth = localStorage.getItem(SIDEBAR.STORAGE_KEY);
@@ -80,9 +76,6 @@ const Sidebar = () => {
     setIsResizing(true);
   }, []);
 
-  const stopResizing = useCallback(() => {
-    setIsResizing(false);
-  }, []);
 
   const resize = useCallback(
     (e) => {
@@ -136,7 +129,7 @@ const Sidebar = () => {
     getUsers();
     getUnreadCounts();
     // Pin/mute data is now loaded from server via checkAuth, no need to load from localStorage
-  }, []); // Empty array - only fetch once on mount
+  }, [getUnreadCounts, getUsers]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -159,10 +152,10 @@ const Sidebar = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       getUnreadCounts();
-    }, 10000); // Changed from 10000 to 30000 (30 seconds)
+    }, 30000);
 
     return () => clearInterval(interval);
-  }, []); // Empty array - no dependencies needed
+  }, [getUnreadCounts]);
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -549,7 +542,6 @@ const Sidebar = () => {
                 e.stopPropagation();
                 await togglePinContact(contextMenu.user._id);
                 setContextMenu(null);
-                forceUpdate({}); // Force UI update
               }}
               className="w-full px-4 py-2 rounded-xl hover:bg-base-300/60 flex items-center gap-2 text-left cursor-pointer"
             >
@@ -562,7 +554,6 @@ const Sidebar = () => {
                 e.stopPropagation();
                 await toggleMuteChat(contextMenu.user._id);
                 setContextMenu(null);
-                forceUpdate({}); // Force UI update
               }}
               className="w-full px-4 py-2 rounded-xl hover:bg-base-300/60 flex items-center gap-2 text-left cursor-pointer"
             >

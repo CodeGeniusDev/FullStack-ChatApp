@@ -16,6 +16,8 @@ const messageSchema = new mongoose.Schema(
     },
     text: {
       type: String,
+      trim: true,
+      maxlength: 5000,
     },
     image: {
       type: String,
@@ -72,8 +74,18 @@ const messageSchema = new mongoose.Schema(
 
 // Compound indexes for common queries
 messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
+messageSchema.index({ receiverId: 1, senderId: 1, createdAt: -1 });
 messageSchema.index({ receiverId: 1, status: 1 });
 messageSchema.index({ createdAt: -1 });
+
+messageSchema.pre("validate", function validateMessageContent(next) {
+  if (!this.text?.trim() && !this.image && !this.video && !this.audio) {
+    const validationError = new mongoose.Error.ValidationError(this);
+    validationError.addError("text", new mongoose.Error.ValidatorError({ message: "Message must contain text or media", path: "text" }));
+    return next(validationError);
+  }
+  next();
+});
 
 const Message = mongoose.model("Message", messageSchema);
 

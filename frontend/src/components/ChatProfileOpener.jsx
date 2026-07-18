@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Link,
   User,
@@ -23,7 +23,6 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import ImageModel from "./ImageModel";
 import toast from "react-hot-toast";
-import { axiosInstance } from "../lib/axios";
 
 const formatLastSeen = (date) => {
   if (!date) return "Never";
@@ -53,7 +52,7 @@ const ChatProfileOpener = ({
 }) => {
   const modalRef = useRef();
   const { onlineUsers } = useAuthStore();
-  const { messages, deleteMessage } = useChatStore();
+  const { messages, clearChat, pinnedContacts, mutedChats, togglePinContact, toggleMuteChat } = useChatStore();
   const [imageModal, setImageModal] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -68,8 +67,8 @@ const ChatProfileOpener = ({
   const [isExporting, setIsExporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [isMuted, setIsMuted] = useState(user.isMuted || false);
-  const [isPinned, setIsPinned] = useState(user.isPinned || false);
+  const isMuted = mutedChats.includes(user._id);
+  const isPinned = pinnedContacts.includes(user._id);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -141,14 +140,7 @@ const ChatProfileOpener = ({
     setIsSearching(false);
   };
 
-  // Load media files
-  useEffect(() => {
-    if (activeTab === "media") {
-      loadMediaFiles();
-    }
-  }, [activeTab, messages]);
-
-  const loadMediaFiles = () => {
+  const loadMediaFiles = useCallback(() => {
     setIsLoadingMedia(true);
 
     const images = [];
@@ -192,7 +184,11 @@ const ChatProfileOpener = ({
 
     setMediaFiles({ images, videos, docs });
     setIsLoadingMedia(false);
-  };
+  }, [messages]);
+
+  useEffect(() => {
+    if (activeTab === "media") loadMediaFiles();
+  }, [activeTab, loadMediaFiles]);
 
   // Export chat functionality
   const handleExportChat = async () => {
@@ -231,30 +227,22 @@ const ChatProfileOpener = ({
     }
   };
 
-  const handleToggleMute = () => {
-    setIsMuted(!isMuted);
-    // TODO: Add API call to update mute status
-    toast.success(isMuted ? "User unmuted" : "User muted");
+  const handleToggleMute = async () => {
+    await toggleMuteChat(user._id);
   };
 
-  const handleTogglePin = () => {
-    setIsPinned(!isPinned);
-    // TODO: Add API call to update pin status
-    toast.success(isPinned ? "Chat unpinned" : "Chat pinned");
+  const handleTogglePin = async () => {
+    await togglePinContact(user._id);
   };
 
   const handleSearchResultClick = (message) => {
-    // Close the profile modal
     onClose();
-
-    // TODO: Navigate to the specific message in the chat
-    // This would typically involve:
-    // 1. Scrolling to the specific message
-    // 2. Highlighting the message
-    // 3. Maybe focusing the chat input
-
-    console.log("Navigate to message:", message._id);
-    toast.success("Navigating to message...");
+    requestAnimationFrame(() => {
+      const element = document.querySelector(`[data-message-id="${CSS.escape(message._id)}"]`);
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      element?.classList.add("ring-2", "ring-primary", "rounded-lg");
+      setTimeout(() => element?.classList.remove("ring-2", "ring-primary", "rounded-lg"), 1800);
+    });
   };
 
   // Clear chat functionality
@@ -262,16 +250,8 @@ const ChatProfileOpener = ({
     setIsClearing(true);
 
     try {
-      // Delete all messages for this user
-      const deletePromises = messages
-        .filter(
-          (msg) =>
-            msg.senderId._id === user._id || msg.receiverId?._id === user._id,
-        )
-        .map((msg) => deleteMessage(msg._id, false));
-
-      await Promise.all(deletePromises);
-
+      const cleared = await clearChat(user._id);
+      if (!cleared) return;
       toast.success("Chat cleared successfully!");
       setShowClearConfirm(false);
       setActiveTab("contact");
@@ -486,7 +466,6 @@ const ChatProfileOpener = ({
                           <Pin size={16} className="text-base-content/60" />
                           Pin in chat
                         </p>
-                        {/* TODO: add original logic */}
                         <p className="text-sm text-base-content/70 truncate">
                           <label className="cursor-pointer flex items-center gap-2">
                             <span className="text-xs">
@@ -508,7 +487,6 @@ const ChatProfileOpener = ({
                           <Bell size={16} className="text-base-content/60" />
                           Mute
                         </p>
-                        {/* TODO: add original logic */}
                         <p className="text-sm text-base-content/70 truncate">
                           <input
                             type="checkbox"

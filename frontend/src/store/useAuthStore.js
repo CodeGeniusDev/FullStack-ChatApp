@@ -3,9 +3,8 @@ import { axiosInstance } from "../lib/axios.js";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 
-const BASE_URL = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace("/api", "")
-  : "http://localhost:5002";
+const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || "http://localhost:5002").replace(/\/+$/, "");
+let authCheckPromise = null;
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,
@@ -15,8 +14,11 @@ export const useAuthStore = create((set, get) => ({
   isCheckingAuth: true,
   onlineUsers: [],
   socket: null,
+  isSocketConnected: false,
 
   checkAuth: async () => {
+    if (authCheckPromise) return authCheckPromise;
+    authCheckPromise = (async () => {
     set({ isCheckingAuth: true });
     try {
       const res = await axiosInstance.get("/auth/check");
@@ -26,24 +28,18 @@ export const useAuthStore = create((set, get) => ({
           isCheckingAuth: false,
         });
         
-        // Load pin/mute data from server into chat store
-        const { useChatStore } = await import("./useChatStore.js");
-        useChatStore.setState({
-          pinnedContacts: res.data.pinnedContacts || [],
-          mutedChats: res.data.mutedChats || [],
-        });
-        
         get().connectSocket();
       }
-    } catch (error) {
-      console.error("Auth check failed:", error);
+    } catch {
       set({
         authUser: null,
         isCheckingAuth: false,
       });
-      document.cookie =
-        "token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+    } finally {
+      authCheckPromise = null;
     }
+    })();
+    return authCheckPromise;
   },
 
   signup: async (data) => {
@@ -77,9 +73,9 @@ export const useAuthStore = create((set, get) => ({
   logOut: async () => {
     try {
       await axiosInstance.post("/auth/logout");
-      set({ authUser: null });
-      toast.success("Logged out successfully");
       get().disconnectSocket();
+      set({ authUser: null, onlineUsers: [] });
+      toast.success("Logged out successfully");
     } catch (error) {
       toast.error(error.response?.data?.message || "Logout failed");
     }
@@ -110,55 +106,51 @@ export const useAuthStore = create((set, get) => ({
     const { authUser, socket } = get();
     if (!authUser || socket?.connected) return;
 
-    console.log("🔌 Connecting to socket server:", BASE_URL);
-
-    const newSocket = io(BASE_URL, {
-      query: {
-        userId: authUser._id,
-      },
-      transports: ["websocket", "polling"],
+    if (socket) {
+      socket.removeAllListeners();
+      socket.disconnect();
+    }
+    const newSocket = io(SOCKET_URL, {
       withCredentials: true,
       // Reconnection settings
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      reconnectionAttempts: Infinity,
+      reconnectionAttempts: 8,
       // Timeout settings
       timeout: 20000,
       // Enable compression
-      perMessageDeflate: true,
     });
 
     newSocket.on("connect", () => {
-      console.log("✅ Socket connected:", newSocket.id);
-      set({ socket: newSocket });
+      set({ socket: newSocket, isSocketConnected: true });
     });
+
+    newSocket.on("disconnect", () => set({ isSocketConnected: false, onlineUsers: [] }));
 
     newSocket.on("connect_error", (error) => {
-      console.error("❌ Socket connection error:", error);
-    });
-
-    newSocket.on("reconnect", (attemptNumber) => {
-      console.log("🔄 Socket reconnected after", attemptNumber, "attempts");
-    });
-
-    newSocket.on("reconnect_error", (error) => {
-      console.error("❌ Socket reconnection error:", error);
+      if (error.message === "Authentication required") {
+        newSocket.io.opts.reconnection = false;
+        newSocket.disconnect();
+        set({ socket: null, isSocketConnected: false, onlineUsers: [] });
+      } else {
+        set({ isSocketConnected: false });
+      }
     });
 
     newSocket.on("getOnlineUsers", (userIds) => {
       set({ onlineUsers: userIds });
     });
 
-    set({ socket: newSocket });
+    set({ socket: newSocket, isSocketConnected: false });
   },
 
   disconnectSocket: () => {
     const { socket } = get();
-    if (socket?.connected) {
-      console.log("🔌 Disconnecting socket");
+    if (socket) {
+      socket.removeAllListeners();
       socket.disconnect();
-      set({ socket: null });
+      set({ socket: null, isSocketConnected: false, onlineUsers: [] });
     }
   },
 }));

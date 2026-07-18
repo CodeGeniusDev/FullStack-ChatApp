@@ -80,7 +80,7 @@ const ProfilePage = () => {
       });
       setIsEditing(false);
       toast.success("Profile updated successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to update profile");
     }
   };

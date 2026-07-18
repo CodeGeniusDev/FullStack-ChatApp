@@ -5,7 +5,6 @@ export const protectRoute = async (req, res, next) => {
   try {
     // Get token from cookies
     const token = req.cookies.token;
-    console.log("Token from cookie:", token ? "Token exists" : "No token");
 
     if (!token) {
       return res.status(401).json({ 
@@ -17,7 +16,6 @@ export const protectRoute = async (req, res, next) => {
     try {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log("Decoded token user ID:", decoded.userId || decoded.userid); // Check both cases
 
       if (!decoded) {
         return res.status(401).json({ 
@@ -27,9 +25,8 @@ export const protectRoute = async (req, res, next) => {
       }
 
       // Handle case sensitivity in JWT payload
-      const userId = decoded.userId || decoded.userid;
+      const userId = decoded.userId;
       if (!userId) {
-        console.error("No user ID found in token:", decoded);
         return res.status(401).json({ 
           message: "Invalid token format",
           code: "INVALID_TOKEN_FORMAT"
@@ -39,9 +36,9 @@ export const protectRoute = async (req, res, next) => {
       // Find user
       const user = await User.findById(userId).select("-password");
       if (!user) {
-        console.error("User not found for ID:", userId);
         return res.status(401).json({ 
-          message: "User not found",
+          success: false,
+          message: "Authentication required",
           code: "USER_NOT_FOUND"
         });
       }
@@ -51,8 +48,6 @@ export const protectRoute = async (req, res, next) => {
       next();
       
     } catch (jwtError) {
-      console.error("JWT Error:", jwtError.name, jwtError.message);
-      
       if (jwtError.name === "JsonWebTokenError") {
         return res.status(401).json({ 
           message: "Invalid token signature",
@@ -70,15 +65,13 @@ export const protectRoute = async (req, res, next) => {
       return res.status(401).json({ 
         message: "Failed to authenticate token",
         code: "AUTH_FAILED",
-        error: process.env.NODE_ENV === 'development' ? jwtError.message : undefined
       });
     }
   } catch (error) {
-    console.error("Auth middleware error:", error);
+    console.error("Auth middleware error:", error.name);
     return res.status(500).json({ 
       message: "Authentication failed",
       code: "AUTH_ERROR",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

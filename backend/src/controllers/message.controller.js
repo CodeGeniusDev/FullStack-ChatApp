@@ -11,27 +11,14 @@ export const getUsersForSidebar = async (req, res) => {
       .select("-password")
       .lean();
 
-    // Get the last message for each conversation with parallel processing
-    const usersWithLastMessage = await Promise.all(
-      allUsers.map(async (user) => {
-        const lastMessage = await Message.findOne({
-          $or: [
-            { senderId: loggedInUserId, receiverId: user._id },
-            { senderId: user._id, receiverId: loggedInUserId },
-          ],
-          deletedFor: { $ne: loggedInUserId },
-        })
-          .sort({ createdAt: -1 })
-          .select("text image video audio createdAt senderId")
-          .lean()
-          .hint({ senderId: 1, receiverId: 1, createdAt: -1 }); // Use index
-
-        return {
-          ...user,
-          lastMessage: lastMessage || null,
-        };
-      })
-    );
+    const lastMessages = await Message.aggregate([
+      { $match: { $or: [{ senderId: loggedInUserId }, { receiverId: loggedInUserId }], deletedFor: { $ne: loggedInUserId } } },
+      { $sort: { createdAt: -1 } },
+      { $addFields: { otherUserId: { $cond: [{ $eq: ["$senderId", loggedInUserId] }, "$receiverId", "$senderId"] } } },
+      { $group: { _id: "$otherUserId", lastMessage: { $first: { _id: "$_id", text: "$text", image: "$image", video: "$video", audio: "$audio", createdAt: "$createdAt", senderId: "$senderId" } } } },
+    ]);
+    const lastMessageByUser = new Map(lastMessages.map((entry) => [entry._id.toString(), entry.lastMessage]));
+    const usersWithLastMessage = allUsers.map((user) => ({ ...user, lastMessage: lastMessageByUser.get(user._id.toString()) || null }));
 
     // Sort users by last message timestamp (most recent first)
     usersWithLastMessage.sort((a, b) => {
@@ -42,8 +29,8 @@ export const getUsersForSidebar = async (req, res) => {
 
     res.status(200).json(usersWithLastMessage);
   } catch (error) {
-    console.error("Error in getUsersForSidebar:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Sidebar query failed:", error.name);
+    res.status(500).json({ message: "Failed to load users" });
   }
 };
 
@@ -53,12 +40,12 @@ export const getMessages = async (req, res) => {
     const senderId = req.user._id;
     
     // Pagination parameters
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
+    if (!(await User.exists({ _id: userToChatId }))) return res.status(404).json({ message: "User not found" });
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
     const skip = (page - 1) * limit;
 
-    // Get total count for pagination info
-    const totalMessages = await Message.countDocuments({
+    const conversationFilter = {
       $or: [
         {
           senderId: senderId,
@@ -71,22 +58,11 @@ export const getMessages = async (req, res) => {
           deletedFor: { $ne: senderId },
         },
       ],
-    });
+    };
 
-    const messages = await Message.find({
-      $or: [
-        {
-          senderId: senderId,
-          receiverId: userToChatId,
-          deletedFor: { $ne: senderId },
-        },
-        {
-          senderId: userToChatId,
-          receiverId: senderId,
-          deletedFor: { $ne: senderId },
-        },
-      ],
-    })
+    const [totalMessages, messages] = await Promise.all([
+      Message.countDocuments(conversationFilter),
+      Message.find(conversationFilter)
       .sort({ createdAt: -1 }) // Get newest first
       .skip(skip)
       .limit(limit)
@@ -100,8 +76,8 @@ export const getMessages = async (req, res) => {
         },
       })
       .populate("reactions.userId", "fullName profilePic")
-      .lean()
-      .hint({ senderId: 1, receiverId: 1, createdAt: -1 }); // Use compound index
+      .lean(),
+    ]);
 
     // Reverse to show oldest first in UI
     messages.reverse();
@@ -117,11 +93,8 @@ export const getMessages = async (req, res) => {
     ).then(() => {
       // Emit delivery status update to sender
       const io = req.app.get("io");
-      const senderSocketId = req.app.get("userSocketMap")?.[userToChatId];
-      if (senderSocketId) {
-        io.to(senderSocketId).emit("messagesDelivered", { userId: senderId });
-      }
-    }).catch(err => console.error("Error updating delivery status:", err));
+      io.to(`user:${userToChatId}`).emit("messagesDelivered", { userId: senderId });
+    }).catch((error) => console.error("Delivery update failed:", error.name));
 
     res.status(200).json({
       messages,
@@ -133,8 +106,8 @@ export const getMessages = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error in getMessages:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Message query failed:", error.name);
+    res.status(500).json({ message: "Failed to load messages" });
   }
 };
 
@@ -143,6 +116,20 @@ export const sendMessage = async (req, res) => {
     const { text, image, video, audio, replyTo } = req.body;
     const { id: receiverId } = req.params;
     const senderId = req.user._id;
+
+    if (receiverId === senderId.toString()) return res.status(400).json({ message: "Cannot message yourself" });
+    if (!(await User.exists({ _id: receiverId }))) return res.status(404).json({ message: "Recipient not found" });
+    const normalizedText = typeof text === "string" ? text.trim() : "";
+    const mediaValues = [image, video, audio].filter(Boolean);
+    if (!normalizedText && mediaValues.length === 0) return res.status(400).json({ message: "Message must contain text or media" });
+    if (normalizedText.length > 5000) return res.status(400).json({ message: "Message is too long" });
+    if (mediaValues.length > 1) return res.status(400).json({ message: "Only one media attachment is allowed" });
+    if (mediaValues.some((value) => typeof value !== "string" || value.length > 1_800_000)) return res.status(413).json({ message: "Media payload is too large" });
+    if (replyTo) {
+      const repliedMessage = await Message.findById(replyTo).lean();
+      const belongsToConversation = repliedMessage && [repliedMessage.senderId.toString(), repliedMessage.receiverId.toString()].includes(senderId.toString()) && [repliedMessage.senderId.toString(), repliedMessage.receiverId.toString()].includes(receiverId);
+      if (!belongsToConversation) return res.status(400).json({ message: "Invalid reply target" });
+    }
 
     let imageUrl, videoUrl, audioUrl, mediaType;
 
@@ -163,7 +150,7 @@ export const sendMessage = async (req, res) => {
           imageUrl = uploadResponse.secure_url;
           mediaType = "image";
         }).catch(uploadError => {
-          console.error("Image upload error:", uploadError);
+          console.error("Image upload failed:", uploadError.name);
           throw new Error("Failed to upload image");
         })
       );
@@ -183,7 +170,7 @@ export const sendMessage = async (req, res) => {
           videoUrl = uploadResponse.secure_url;
           mediaType = "video";
         }).catch(uploadError => {
-          console.error("Video upload error:", uploadError);
+          console.error("Video upload failed:", uploadError.name);
           throw new Error("Failed to upload video");
         })
       );
@@ -198,7 +185,7 @@ export const sendMessage = async (req, res) => {
           audioUrl = uploadResponse.secure_url;
           mediaType = "audio";
         }).catch(uploadError => {
-          console.error("Audio upload error:", uploadError);
+          console.error("Audio upload failed:", uploadError.name);
           throw new Error("Failed to upload audio");
         })
       );
@@ -212,7 +199,7 @@ export const sendMessage = async (req, res) => {
     const newMessage = new Message({
       senderId,
       receiverId,
-      text: text || "",
+      text: normalizedText,
       image: imageUrl,
       video: videoUrl,
       audio: audioUrl,
@@ -234,24 +221,23 @@ export const sendMessage = async (req, res) => {
     }
 
     const io = req.app.get("io");
-    const receiverSocketId = req.app.get("userSocketMap")?.[receiverId];
-
-    // Send to receiver immediately if online
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newMessage", newMessage.toObject());
+    io.to(`user:${senderId}`).emit("messageSent", newMessage.toObject());
+    const recipientOnline = req.app.get("userSocketMap")?.has(receiverId);
+    if (recipientOnline) {
+      io.to(`user:${receiverId}`).emit("newMessage", newMessage.toObject());
 
       // Update status to delivered if receiver is online (async)
       newMessage.status = "delivered";
-      newMessage.save().catch(err => 
-        console.error("Error updating message status:", err)
+      newMessage.save().catch((error) =>
+        console.error("Message status update failed:", error.name)
       );
     }
 
     // Send response immediately without waiting for status update
     res.status(201).json(newMessage);
   } catch (error) {
-    console.error("Error in sendMessage:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Message send failed:", error.name);
+    res.status(500).json({ message: "Failed to send message" });
   }
 };
 
@@ -272,15 +258,12 @@ export const markAsRead = async (req, res) => {
 
     // Emit read status to sender (async, don't block response)
     const io = req.app.get("io");
-    const senderSocketId = req.app.get("userSocketMap")?.[senderId];
-    if (senderSocketId) {
-      io.to(senderSocketId).emit("messagesRead", { userId: receiverId });
-    }
+    io.to(`user:${senderId}`).emit("messagesRead", { userId: receiverId });
 
     res.status(200).json({ message: "Messages marked as read" });
   } catch (error) {
     console.error("Error in markAsRead:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: "Failed to update message status" });
   }
 };
 
@@ -294,41 +277,39 @@ export const deleteMessage = async (req, res) => {
     const message = await Message.findById(messageId);
 
     if (!message) {
-      return res.status(404).json({ error: "Message not found" });
+      return res.status(404).json({ message: "Message not found" });
     }
 
     if (deleteForEveryone) {
       if (message.senderId.toString() !== userId.toString()) {
-        return res.status(403).json({ error: "Unauthorized" });
+        return res.status(403).json({ message: "Unauthorized" });
       }
 
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
       if (message.createdAt < oneHourAgo) {
-        return res.status(400).json({ error: "Can only delete within 1 hour" });
+        return res.status(400).json({ message: "Can only delete within 1 hour" });
       }
 
       await Message.findByIdAndDelete(messageId);
 
       const io = req.app.get("io");
-      const receiverSocketId =
-        req.app.get("userSocketMap")?.[message.receiverId];
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit("messageDeleted", {
+      io.to(`user:${message.receiverId}`).emit("messageDeleted", {
           messageId,
           deleteForEveryone: true,
-        });
-      }
+      });
 
       res.status(200).json({ message: "Message deleted for everyone" });
     } else {
-      message.deletedFor.push(userId);
+      const isParticipant = [message.senderId.toString(), message.receiverId.toString()].includes(userId.toString());
+      if (!isParticipant) return res.status(403).json({ message: "Unauthorized" });
+      if (!message.deletedFor.some((id) => id.toString() === userId.toString())) message.deletedFor.push(userId);
       await message.save();
 
       res.status(200).json({ message: "Message deleted for you" });
     }
   } catch (error) {
     console.error("Error in deleteMessage:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: "Failed to delete message" });
   }
 };
 
@@ -363,7 +344,7 @@ export const clearChat = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in clearChat:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -371,22 +352,23 @@ export const clearChat = async (req, res) => {
 export const editMessage = async (req, res) => {
   try {
     const { id: messageId } = req.params;
-    const { text } = req.body;
+    const text = typeof req.body.text === "string" ? req.body.text.trim() : "";
     const userId = req.user._id;
+    if (!text || text.length > 5000) return res.status(400).json({ message: "Message text must be between 1 and 5000 characters" });
 
     const message = await Message.findById(messageId);
 
     if (!message) {
-      return res.status(404).json({ error: "Message not found" });
+      return res.status(404).json({ message: "Message not found" });
     }
 
     if (message.senderId.toString() !== userId.toString()) {
-      return res.status(403).json({ error: "Unauthorized" });
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     if (message.createdAt < fifteenMinutesAgo) {
-      return res.status(400).json({ error: "Can only edit within 15 minutes" });
+      return res.status(400).json({ message: "Can only edit within 15 minutes" });
     }
 
     message.text = text;
@@ -398,15 +380,12 @@ export const editMessage = async (req, res) => {
     await message.populate("receiverId", "fullName profilePic");
 
     const io = req.app.get("io");
-    const receiverSocketId = req.app.get("userSocketMap")?.[message.receiverId];
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("messageEdited", message.toObject());
-    }
+    io.to(`user:${message.receiverId}`).emit("messageEdited", message.toObject());
 
     res.status(200).json(message);
   } catch (error) {
     console.error("Error in editMessage:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: "Failed to edit message" });
   }
 };
 
@@ -416,12 +395,15 @@ export const addReaction = async (req, res) => {
     const { id: messageId } = req.params;
     const { emoji } = req.body;
     const userId = req.user._id;
+    if (typeof emoji !== "string" || !emoji.trim() || emoji.length > 16) return res.status(400).json({ message: "Invalid reaction" });
 
     const message = await Message.findById(messageId);
 
     if (!message) {
-      return res.status(404).json({ error: "Message not found" });
+      return res.status(404).json({ message: "Message not found" });
     }
+
+    if (![message.senderId.toString(), message.receiverId.toString()].includes(userId.toString())) return res.status(403).json({ message: "Unauthorized" });
 
     message.reactions = message.reactions.filter(
       (r) => r.userId.toString() !== userId.toString()
@@ -437,19 +419,15 @@ export const addReaction = async (req, res) => {
       message.senderId.toString() === userId.toString()
         ? message.receiverId
         : message.senderId;
-    const otherUserSocketId = req.app.get("userSocketMap")?.[otherUserId];
-
-    if (otherUserSocketId) {
-      io.to(otherUserSocketId).emit("reactionAdded", {
+    io.to(`user:${otherUserId}`).emit("reactionAdded", {
         messageId,
         reactions: message.reactions,
-      });
-    }
+    });
 
     res.status(200).json(message);
   } catch (error) {
     console.error("Error in addReaction:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: "Failed to update reaction" });
   }
 };
 
@@ -463,8 +441,10 @@ export const removeReaction = async (req, res) => {
     const message = await Message.findById(messageId);
 
     if (!message) {
-      return res.status(404).json({ error: "Message not found" });
+      return res.status(404).json({ message: "Message not found" });
     }
+
+    if (![message.senderId.toString(), message.receiverId.toString()].includes(userId.toString())) return res.status(403).json({ message: "Unauthorized" });
 
     // Remove the specific reaction from the user
     message.reactions = message.reactions.filter(
@@ -480,19 +460,15 @@ export const removeReaction = async (req, res) => {
       message.senderId.toString() === userId.toString()
         ? message.receiverId
         : message.senderId;
-    const otherUserSocketId = req.app.get("userSocketMap")?.[otherUserId];
-
-    if (otherUserSocketId) {
-      io.to(otherUserSocketId).emit("reactionRemoved", {
+    io.to(`user:${otherUserId}`).emit("reactionRemoved", {
         messageId,
         reactions: message.reactions,
-      });
-    }
+    });
 
     res.status(200).json(message);
   } catch (error) {
     console.error("Error in removeReaction:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: "Failed to update reaction" });
   }
 };
 
@@ -520,6 +496,6 @@ export const getUnreadCount = async (req, res) => {
     res.status(200).json(unreadCounts);
   } catch (error) {
     console.error("Error in getUnreadCount:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: "Failed to load unread counts" });
   }
 };

@@ -25,14 +25,12 @@ import {
 import ChatProfileOpener from "./ChatProfileOpener";
 import ImageModel from "./ImageModel";
 
-const ChatContainer = ({ onClose, user, message }) => {
+const ChatContainer = () => {
   const {
     messages,
     getMessages,
     isMessagesLoading,
     selectedUser,
-    subscribeToMessages,
-    unsubscribeFromMessages,
     setReplyingTo,
     deleteMessage,
     addReaction,
@@ -43,7 +41,8 @@ const ChatContainer = ({ onClose, user, message }) => {
     isLoadingMore,
   } = useChatStore();
 
-  const { authUser } = useAuthStore();
+  const authUser = useAuthStore((state) => state.authUser);
+  const isSocketConnected = useAuthStore((state) => state.isSocketConnected);
   const messageEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const contextMenuRef = useRef(null);
@@ -53,8 +52,8 @@ const ChatContainer = ({ onClose, user, message }) => {
   const [showEmojiSet2, setShowEmojiSet2] = useState(false);
   const [mobileShowEmojiSet2, setMobileShowEmojiSet2] = useState(false);
   const [imageModal, setImageModal] = useState(null);
-  const [imageZoom, setImageZoom] = useState(1);
-  const [imageRotation, setImageRotation] = useState(0);
+  const [, setImageZoom] = useState(1);
+  const [, setImageRotation] = useState(0);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const previousMessagesLength = useRef(0);
@@ -111,22 +110,11 @@ const ChatContainer = ({ onClose, user, message }) => {
   // ✅ FIXED: Load messages when user changes
   useEffect(() => {
     if (selectedUser?._id) {
-      console.log(
-        "📨 Loading messages for user:",
-        selectedUser.fullName,
-        "and ID:",
-        selectedUser._id,
-      );
       isInitialLoad.current = true;
       getMessages(selectedUser._id);
-      subscribeToMessages();
     }
 
-    return () => {
-      console.log("🔌 Unsubscribing from messages");
-      unsubscribeFromMessages();
-    };
-  }, [selectedUser?._id]);
+  }, [getMessages, selectedUser?._id]);
 
   // ✅ CRITICAL FIX: Scroll to bottom INSTANTLY on initial load - MULTIPLE APPROACHES
   useEffect(() => {
@@ -372,7 +360,7 @@ const ChatContainer = ({ onClose, user, message }) => {
 
       return () => cancelAnimationFrame(rafId);
     }
-  }, [contextMenu?.message?._id, contextMenu?.positionLocked]);
+  }, [contextMenu]);
 
   const handleContextMenu = (e, message) => {
     e.preventDefault();
@@ -600,7 +588,7 @@ const ChatContainer = ({ onClose, user, message }) => {
   const reactionEmojisSet2 = ["😊", "😍", "🔥", "🎉", "👏", "🤔"];
 
   // Audio Player
-  const AudioPlayer = ({ audioUrl, messageId }) => {
+  const AudioPlayer = ({ audioUrl }) => {
     const audioRef = useRef(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -743,7 +731,12 @@ const ChatContainer = ({ onClose, user, message }) => {
           </div>
         )}
 
-        <ChatHeader />
+      <ChatHeader />
+      {!isSocketConnected && (
+        <div className="bg-warning/15 border-b border-warning/30 px-3 py-1.5 text-center text-xs text-warning-content" role="status">
+          Reconnecting to real-time messaging…
+        </div>
+      )}
 
         {/* Messages */}
         <div
@@ -783,6 +776,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                 return (
                   <div
                     key={message._id}
+                    data-message-id={message._id}
                     className={`chat ${
                       isOwnMessage ? "chat-end" : "chat-start"
                     }`}
@@ -814,7 +808,7 @@ const ChatContainer = ({ onClose, user, message }) => {
                     <div className="">
                       <div className="relative group">
                         <div
-                          className={`chat-bubble backdrop-blur-lg p-2 px-3 md:ml-0 ml-4 flex flex-col max-w-70 sm:max-w-lg ext-base-content ${
+                          className={`chat-bubble backdrop-blur-lg p-2 px-3 md:ml-0 ml-4 flex flex-col max-w-70 sm:max-w-lg text-base-content break-words [overflow-wrap:anywhere] ${
                             isOwnMessage ? "bg-base-300/70" : "bg-base-200/70"
                           }`}
                         >

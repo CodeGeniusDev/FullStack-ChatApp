@@ -6,15 +6,22 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      trim: true,
+      lowercase: true,
+      maxlength: 254,
     },
     fullName: {
       type: String,
       required: true,
+      trim: true,
+      minlength: 2,
+      maxlength: 80,
     },
     password: {
       type: String,
       required: true,
       minlength: 6,
+      select: false,
     },
     profilePic: {
       type: String,
@@ -30,11 +37,11 @@ const userSchema = new mongoose.Schema(
       default: Date.now,
     },
     pinnedContacts: {
-      type: [String],
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
       default: [],
     },
     mutedChats: {
-      type: [String],
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
       default: [],
     },
   },
