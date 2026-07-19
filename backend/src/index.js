@@ -4,6 +4,7 @@ import { createServer } from "http";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import { connectDB, disconnectDB, getDatabaseHealth, sanitizeDatabaseError } from "./lib/db.js";
@@ -26,11 +27,22 @@ const corsOptions = {
 
 app.disable("x-powered-by");
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(compression({ threshold: 1024 }));
 app.use(cors(corsOptions));
 app.options("*splat", cors(corsOptions));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 app.use(cookieParser());
+if (process.env.NODE_ENV !== "production") {
+  app.use((req, res, next) => {
+    const startedAt = performance.now();
+    res.on("finish", () => {
+      const duration = performance.now() - startedAt;
+      if (duration > 250) console.warn(`Slow request: ${req.method} ${req.path} ${duration.toFixed(0)}ms`);
+    });
+    next();
+  });
+}
 
 const io = createSocketServer(server, allowedOrigins);
 app.set("io", io);

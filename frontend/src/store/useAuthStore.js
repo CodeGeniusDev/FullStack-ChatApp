@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { axiosInstance } from "../lib/axios.js";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
@@ -6,7 +7,7 @@ import { io } from "socket.io-client";
 const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || "http://localhost:5002").replace(/\/+$/, "");
 let authCheckPromise = null;
 
-export const useAuthStore = create((set, get) => ({
+export const useAuthStore = create(persist((set, get) => ({
   authUser: null,
   isSigningUp: false,
   isLoggingIn: false,
@@ -15,11 +16,14 @@ export const useAuthStore = create((set, get) => ({
   onlineUsers: [],
   socket: null,
   isSocketConnected: false,
+  isHydrated: false,
+  authCheckError: null,
+  setHydrated: () => set({ isHydrated: true }),
 
   checkAuth: async () => {
     if (authCheckPromise) return authCheckPromise;
     authCheckPromise = (async () => {
-    set({ isCheckingAuth: true });
+    set({ isCheckingAuth: true, authCheckError: null });
     try {
       const res = await axiosInstance.get("/auth/check");
       if (res.data) {
@@ -30,11 +34,14 @@ export const useAuthStore = create((set, get) => ({
         
         get().connectSocket();
       }
-    } catch {
-      set({
-        authUser: null,
-        isCheckingAuth: false,
-      });
+    } catch (error) {
+      const isInvalidSession = error.response?.status === 401 || error.response?.status === 403;
+      if (isInvalidSession) {
+        set({ authUser: null, isCheckingAuth: false, authCheckError: null });
+      } else {
+        // Keep the last verified public profile available while offline.
+        set({ isCheckingAuth: false, authCheckError: "Unable to verify your session" });
+      }
     } finally {
       authCheckPromise = null;
     }
@@ -152,5 +159,12 @@ export const useAuthStore = create((set, get) => ({
       socket.disconnect();
       set({ socket: null, isSocketConnected: false, onlineUsers: [] });
     }
+  },
+}), {
+  name: "chatgeniusx-session-v1",
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({ authUser: state.authUser }),
+  onRehydrateStorage: () => (state) => {
+    state?.setHydrated?.();
   },
 }));

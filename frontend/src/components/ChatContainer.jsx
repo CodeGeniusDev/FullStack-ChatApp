@@ -21,25 +21,25 @@ import {
   Loader2,
   Play,
   Pause,
+  RefreshCcw,
 } from "lucide-react";
 import ChatProfileOpener from "./ChatProfileOpener";
 import ImageModel from "./ImageModel";
 
 const ChatContainer = () => {
-  const {
-    messages,
-    getMessages,
-    isMessagesLoading,
-    selectedUser,
-    setReplyingTo,
-    deleteMessage,
-    addReaction,
-    removeReaction,
-    typingUsers,
-    loadMoreMessages,
-    hasMoreMessages,
-    isLoadingMore,
-  } = useChatStore();
+  const messages = useChatStore((state) => state.messages);
+  const getMessages = useChatStore((state) => state.getMessages);
+  const isMessagesLoading = useChatStore((state) => state.isMessagesLoading);
+  const selectedUser = useChatStore((state) => state.selectedUser);
+  const setReplyingTo = useChatStore((state) => state.setReplyingTo);
+  const deleteMessage = useChatStore((state) => state.deleteMessage);
+  const addReaction = useChatStore((state) => state.addReaction);
+  const removeReaction = useChatStore((state) => state.removeReaction);
+  const typingUsers = useChatStore((state) => state.typingUsers);
+  const loadMoreMessages = useChatStore((state) => state.loadMoreMessages);
+  const hasMoreMessages = useChatStore((state) => state.hasMoreMessages);
+  const isLoadingMore = useChatStore((state) => state.isLoadingMore);
+  const retryMessage = useChatStore((state) => state.retryMessage);
 
   const authUser = useAuthStore((state) => state.authUser);
   const isSocketConnected = useAuthStore((state) => state.isSocketConnected);
@@ -107,6 +107,20 @@ const ChatContainer = () => {
     }
   }, []);
 
+  const handleLoadOlder = useCallback(async () => {
+    const container = messagesContainerRef.current;
+    if (!container || !selectedUser?._id || isLoadingMore || !hasMoreMessages) return;
+    const previousHeight = container.scrollHeight;
+    const previousTop = container.scrollTop;
+    await loadMoreMessages(selectedUser._id);
+    requestAnimationFrame(() => {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop =
+          messagesContainerRef.current.scrollHeight - previousHeight + previousTop;
+      }
+    });
+  }, [hasMoreMessages, isLoadingMore, loadMoreMessages, selectedUser?._id]);
+
   // ✅ FIXED: Load messages when user changes
   useEffect(() => {
     if (selectedUser?._id) {
@@ -118,7 +132,7 @@ const ChatContainer = () => {
 
   // ✅ CRITICAL FIX: Scroll to bottom INSTANTLY on initial load - MULTIPLE APPROACHES
   useEffect(() => {
-    if (!isMessagesLoading && messages.length > 0 && isInitialLoad.current) {
+    if (messages.length > 0 && isInitialLoad.current) {
       // Method 1: Immediate scroll before render
       if (messagesContainerRef.current) {
         messagesContainerRef.current.scrollTop =
@@ -146,7 +160,7 @@ const ChatContainer = () => {
       isInitialLoad.current = false;
       previousMessagesLength.current = messages.length;
     }
-  }, [isMessagesLoading, messages.length]);
+  }, [messages.length]);
 
   // Handle new messages after initial load
   useEffect(() => {
@@ -185,13 +199,16 @@ const ChatContainer = () => {
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
       setShowScrollButton(distanceFromBottom > 300);
+      if (scrollTop < 80 && hasMoreMessages && !isLoadingMore) {
+        void handleLoadOlder();
+      }
     };
 
     container.addEventListener("scroll", handleScroll);
     handleScroll();
 
     return () => container.removeEventListener("scroll", handleScroll);
-  }, [checkIfNearBottom]);
+  }, [checkIfNearBottom, handleLoadOlder, hasMoreMessages, isLoadingMore]);
 
   useEffect(() => {
     if (isOtherUserTyping) {
@@ -494,14 +511,30 @@ const ChatContainer = () => {
     setImageRotation(0);
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
+  const getStatusIcon = (message) => {
+    switch (message.status) {
       case "sent":
         return <Check className="w-4 h-4 text-gray-400" />;
       case "delivered":
         return <CheckCheck className="w-4 h-4 text-gray-400" />;
       case "read":
         return <CheckCheck className="w-4 h-4 text-blue-500" />;
+      case "sending":
+        return <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />;
+      case "failed":
+        return (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void retryMessage(message._id);
+            }}
+            className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-full text-error hover:bg-error/10"
+            aria-label="Retry failed message"
+          >
+            <RefreshCcw className="h-4 w-4" />
+          </button>
+        );
       default:
         return null;
     }
@@ -761,7 +794,7 @@ const ChatContainer = () => {
                     </div>
                   ) : (
                     <button
-                      onClick={() => loadMoreMessages(selectedUser._id)}
+                      onClick={handleLoadOlder}
                       className="text-primary hover:underline text-sm font-medium px-4 py-2 rounded-lg hover:bg-base-200 transition-all duration-200 cursor-pointer hover:scale-105 active:scale-95"
                     >
                       Load More Messages
@@ -840,6 +873,9 @@ const ChatContainer = () => {
                               src={message.image}
                               alt="Attachment"
                               loading="lazy"
+                              decoding="async"
+                              width="400"
+                              height="300"
                               className="sm:w-[200px] sm:max-h-[300px] max-h-[400px] object-cover rounded-md mb-2 cursor-pointer hover:opacity-90 transition-all duration-200"
                               onClick={() => handleImageClick(message)}
                             />
@@ -901,7 +937,7 @@ const ChatContainer = () => {
                               <time className="text-xs opacity-50">
                                 {formatMessageTime(message.createdAt)}
                               </time>
-                              {isOwnMessage && getStatusIcon(message.status)}
+                              {isOwnMessage && getStatusIcon(message)}
                             </div>
                           </div>
                         </div>

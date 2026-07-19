@@ -5,7 +5,7 @@ import NoChatSelected from "../components/NoChatSelected.jsx";
 import ChatContainer from "../components/ChatContainer.jsx";
 
 const HomePage = () => {
-  const { selectedUser } = useChatStore();
+  const selectedUser = useChatStore((state) => state.selectedUser);
 
   return (
     <div className="relative h-[100dvh] overflow-hidden">

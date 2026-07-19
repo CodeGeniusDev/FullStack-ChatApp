@@ -74,7 +74,7 @@ export default defineConfig({
           // Socket and axios
           'network': ['socket.io-client', 'axios'],
           // UI libs
-          'ui-libs': ['lucide-react', 'react-hot-toast', 'emoji-picker-react'],
+          'ui-libs': ['lucide-react', 'react-hot-toast'],
           // State management
           'state': ['zustand']
         },

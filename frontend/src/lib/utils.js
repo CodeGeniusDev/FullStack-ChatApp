@@ -33,6 +33,12 @@ export const truncateText = (text, maxLength = 30) => {
   return text.substring(0, maxLength) + "...";
 };
 
+export const getAvatarUrl = (url, size = 96) => {
+  if (!url) return "/avatar.png";
+  if (!url.includes("res.cloudinary.com") || !url.includes("/upload/")) return url;
+  return url.replace("/upload/", `/upload/f_auto,q_auto:eco,c_fill,g_face,w_${size},h_${size}/`);
+};
+
 export { 
   requestNotificationPermission, 
   showNotification,

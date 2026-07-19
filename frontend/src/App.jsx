@@ -1,17 +1,17 @@
 import Navbar from "./components/Navbar";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import ErrorBoundary from "./components/ErrorBoundary";
+import Home from "./pages/Home";
 
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/useAuthStore";
 import { useChatStore } from "./store/useChatStore";
 import { useThemeStore } from "./store/useThemeStore";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 
 // import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 
-const Home = lazy(() => import("./pages/Home"));
 const SignUp = lazy(() => import("./pages/Signup"));
 const Login = lazy(() => import("./pages/Login"));
 const Setting = lazy(() => import("./pages/Setting"));
@@ -28,9 +28,13 @@ const App = () => {
   const authUser = useAuthStore((state) => state.authUser);
   const checkAuth = useAuthStore((state) => state.checkAuth);
   const isCheckingAuth = useAuthStore((state) => state.isCheckingAuth);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
   const socket = useAuthStore((state) => state.socket);
-  const initNotifications = useChatStore((state) => state.initNotifications);
+  const authCheckError = useAuthStore((state) => state.authCheckError);
+  const isOffline = useChatStore((state) => state.isOffline);
+  const getUsers = useChatStore((state) => state.getUsers);
   const { theme } = useThemeStore();
+  const sessionOwnerRef = useRef(authUser?._id || null);
 
   useEffect(() => {
     checkAuth();
@@ -38,12 +42,35 @@ const App = () => {
 
   useEffect(() => {
     if (authUser) {
+      if (sessionOwnerRef.current && sessionOwnerRef.current !== authUser._id) {
+        useChatStore.getState().resetSession();
+      }
+      sessionOwnerRef.current = authUser._id;
       useChatStore.setState({ pinnedContacts: authUser.pinnedContacts || [], mutedChats: authUser.mutedChats || [] });
-      initNotifications();
-    } else {
+      void getUsers();
+    } else if (!isCheckingAuth) {
+      sessionOwnerRef.current = null;
       useChatStore.getState().resetSession();
     }
-  }, [authUser, initNotifications]);
+  }, [authUser, getUsers, isCheckingAuth]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      const chatStore = useChatStore.getState();
+      chatStore.setOffline(false);
+      if (useAuthStore.getState().authUser) {
+        void chatStore.getUsers();
+        if (chatStore.selectedUser?._id) void chatStore.getMessages(chatStore.selectedUser._id);
+      }
+    };
+    const handleOffline = () => useChatStore.getState().setOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (!authUser || !socket) return undefined;
@@ -52,7 +79,7 @@ const App = () => {
     return () => chatStore.unsubscribeFromMessages();
   }, [authUser, socket]);
 
-  if (isCheckingAuth && !authUser)
+  if ((!isHydrated || isCheckingAuth) && !authUser)
     return (
       // <div className="flex items-center justify-center h-screen bg-transparent">
       // </div>
@@ -86,6 +113,11 @@ const App = () => {
     <ErrorBoundary>
       <div data-theme={theme}>
         <Navbar />
+        {authUser && (isOffline || authCheckError) && (
+          <div className="fixed inset-x-0 top-16 z-50 bg-warning px-3 py-1 text-center text-xs text-warning-content" role="status">
+            Offline mode — showing saved chats. Changes will sync after reconnecting.
+          </div>
+        )}
 
         <Suspense fallback={<RouteLoader />}>
           <Routes>

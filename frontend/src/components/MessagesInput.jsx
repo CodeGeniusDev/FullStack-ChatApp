@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { Image, Send, X, Smile, Paperclip, Mic } from "lucide-react";
 import toast from "react-hot-toast";
-import EmojiPicker from "emoji-picker-react";
 import { compressImage, debounce } from "../lib/utils";
+
+const EmojiPicker = lazy(() => import("emoji-picker-react"));
 
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -22,8 +23,11 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
-  const { sendMessage, replyingTo, clearReplyingTo, editMessage, setTyping, isSendingMessage } =
-    useChatStore();
+  const sendMessage = useChatStore((state) => state.sendMessage);
+  const replyingTo = useChatStore((state) => state.replyingTo);
+  const clearReplyingTo = useChatStore((state) => state.clearReplyingTo);
+  const editMessage = useChatStore((state) => state.editMessage);
+  const setTyping = useChatStore((state) => state.setTyping);
 
   const debouncedStopTyping = useRef(
     debounce(() => setTyping(false), 3000),
@@ -419,7 +423,7 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
               placeholder="Type a message..."
               value={text}
               onChange={(e) => handleTyping(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               onInput={(e) => {
                 e.target.style.height = "auto";
                 e.target.style.height =
@@ -444,15 +448,15 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
 
             {showEmojiPicker && (
               <div className="absolute bottom-full right-0 mb-2 z-[100]">
-                <EmojiPicker
-                  onEmojiClick={handleEmojiClick}
-                  theme="dark"
-                  width={280}
-                  height={400}
-                  searchDisabled
-                  // skinTonesDisabled
-                  // previewConfig={{ showPreview: true }}
-                />
+                <Suspense fallback={<div className="h-[400px] w-[280px] rounded-lg bg-base-200 animate-pulse" />}>
+                  <EmojiPicker
+                    onEmojiClick={handleEmojiClick}
+                    theme="dark"
+                    width={280}
+                    height={400}
+                    searchDisabled
+                  />
+                </Suspense>
               </div>
             )}
           </div>
@@ -466,11 +470,11 @@ const MessageInput = ({ editingMessage, setEditingMessage }) => {
               data-tip="Send"
               disabled={
                 (!text.trim() && !imagePreview && mediaPreviews.length === 0) ||
-                isUploading || isSendingMessage
+                isUploading
               }
               title="Send message"
             >
-              {isSendingMessage ? <span className="loading loading-spinner loading-sm" /> : <Send size={20} />}
+              <Send size={20} />
             </button>
           ) : (
             <button

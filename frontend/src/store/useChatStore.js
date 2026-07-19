@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "./useAuthStore";
@@ -24,8 +25,9 @@ const mergeUniqueMessages = (messages) => {
   });
 };
 
-export const useChatStore = create((set, get) => ({
+export const useChatStore = create(persist((set, get) => ({
   messages: [],
+  messageCache: {},
   users: [],
   selectedUser: null,
   isUsersLoading: false,
@@ -38,16 +40,29 @@ export const useChatStore = create((set, get) => ({
   mutedChats: [],
   // Pagination state
   currentPage: 1,
+  messageCursor: null,
   hasMoreMessages: false,
   isLoadingMore: false,
   isSendingMessage: false,
+  pendingSendCount: 0,
+  isHydrated: false,
+  isOffline: typeof navigator !== "undefined" ? !navigator.onLine : false,
+  setHydrated: () => set((state) => ({
+    isHydrated: true,
+    messages: state.selectedUser?._id
+      ? (state.messageCache[state.selectedUser._id]?.messages || []).map((message) =>
+          message.status === "sending" ? { ...message, status: "failed" } : message,
+        )
+      : [],
+  })),
+  setOffline: (isOffline) => set({ isOffline }),
   resetSession: () => {
     const timeout = get().typingTimeout;
     if (timeout) clearTimeout(timeout);
     typingClearTimers.forEach(clearTimeout);
     typingClearTimers.clear();
     messageRequestId += 1;
-    set({ messages: [], users: [], selectedUser: null, unreadCounts: {}, replyingTo: null, typingUsers: {}, pinnedContacts: [], mutedChats: [], currentPage: 1, hasMoreMessages: false, isLoadingMore: false, isSendingMessage: false, typingTimeout: null });
+    set({ messages: [], messageCache: {}, users: [], selectedUser: null, unreadCounts: {}, replyingTo: null, typingUsers: {}, pinnedContacts: [], mutedChats: [], currentPage: 1, messageCursor: null, hasMoreMessages: false, isLoadingMore: false, isSendingMessage: false, pendingSendCount: 0, typingTimeout: null });
   },
 
   // Initialize notifications
@@ -63,11 +78,15 @@ export const useChatStore = create((set, get) => ({
     set({ isUsersLoading: true });
     try {
       const res = await axiosInstance.get("/messages/user");
-      set({ users: res.data });
+      const unreadCounts = Object.fromEntries(
+        res.data.filter((user) => user.unreadCount > 0).map((user) => [user._id, user.unreadCount]),
+      );
+      set({ users: res.data, unreadCounts });
     } catch (error) {
       console.error("Error fetching users:", error);
-      toast.error(error.response?.data?.message || "Failed to fetch users");
-      set({ users: [] });
+      if (!get().users.length && navigator.onLine) {
+        toast.error(error.response?.data?.message || "Failed to fetch users");
+      }
     } finally {
       set({ isUsersLoading: false });
       usersPromise = null;
@@ -112,13 +131,14 @@ export const useChatStore = create((set, get) => ({
     messageAbortController?.abort();
     messageAbortController = new AbortController();
     const { signal } = messageAbortController;
-    set({ isMessagesLoading: true, currentPage: 1, messages: [] });
+    const cachedMessages = get().messageCache[userId]?.messages;
+    set({ isMessagesLoading: true, currentPage: 1, ...(cachedMessages?.length ? { messages: cachedMessages } : {}) });
     try {
       if (!userId) {
         throw new Error("No user ID provided");
       }
       const res = await axiosInstance.get(
-        `/messages/user/${userId}?page=1&limit=50`, { signal },
+        `/messages/user/${userId}?limit=40`, { signal },
       );
 
       if (requestId !== messageRequestId || get().selectedUser?._id !== userId) return;
@@ -126,6 +146,7 @@ export const useChatStore = create((set, get) => ({
         messages: mergeUniqueMessages(res.data.messages || []),
         hasMoreMessages: res.data.pagination?.hasMore || false,
         currentPage: 1,
+        messageCursor: res.data.pagination?.nextCursor || null,
       });
 
       // Mark messages as read
@@ -133,8 +154,9 @@ export const useChatStore = create((set, get) => ({
     } catch (error) {
       if (error.code === "ERR_CANCELED") return;
       console.error("Error fetching messages:", error);
-      toast.error(error.response?.data?.message || "Failed to load messages");
-      if (requestId === messageRequestId) set({ messages: [] });
+      if (!get().messages.length && navigator.onLine) {
+        toast.error(error.response?.data?.message || "Failed to load messages");
+      }
     } finally {
       if (requestId === messageRequestId) set({ isMessagesLoading: false });
     }
@@ -142,16 +164,15 @@ export const useChatStore = create((set, get) => ({
 
   // Load more messages (pagination)
   loadMoreMessages: async (userId) => {
-    const { currentPage, hasMoreMessages, isLoadingMore, selectedUser } = get();
+    const { currentPage, messageCursor, hasMoreMessages, isLoadingMore, selectedUser } = get();
 
     if (!hasMoreMessages || isLoadingMore || selectedUser?._id !== userId) return;
     const requestId = messageRequestId;
 
     set({ isLoadingMore: true });
     try {
-      const nextPage = currentPage + 1;
       const res = await axiosInstance.get(
-        `/messages/user/${userId}?page=${nextPage}&limit=50`,
+        `/messages/user/${userId}?limit=40&before=${encodeURIComponent(messageCursor)}`,
       );
 
       const olderMessages = res.data.messages || [];
@@ -159,7 +180,8 @@ export const useChatStore = create((set, get) => ({
       if (requestId !== messageRequestId || get().selectedUser?._id !== userId) return;
       set((state) => ({
         messages: mergeUniqueMessages([...olderMessages, ...state.messages]),
-        currentPage: nextPage,
+        currentPage: currentPage + 1,
+        messageCursor: res.data.pagination?.nextCursor || null,
         hasMoreMessages: res.data.pagination?.hasMore || false,
         isLoadingMore: false,
       }));
@@ -171,13 +193,11 @@ export const useChatStore = create((set, get) => ({
   },
 
   sendMessage: async (messageData) => {
-    const { selectedUser, messages, replyingTo, isSendingMessage } = get();
+    const { selectedUser, replyingTo } = get();
     if (!selectedUser) {
       toast.error("No user selected");
       return false;
     }
-    if (isSendingMessage) return false;
-
     const authUser = useAuthStore.getState().authUser;
 
     // Create optimistic message for instant UI update
@@ -198,14 +218,15 @@ export const useChatStore = create((set, get) => ({
         profilePic: selectedUser.profilePic,
       },
       replyTo: replyingTo || null,
-      status: "sent",
+      status: "sending",
+      pendingPayload: messageData,
       createdAt: new Date().toISOString(),
       reactions: [],
       isEdited: false,
     };
 
     // Instantly add to UI and update sidebar
-    set((state) => ({ messages: [...state.messages, optimisticMessage], replyingTo: null, isSendingMessage: true }));
+    set((state) => ({ messages: [...state.messages, optimisticMessage], replyingTo: null, pendingSendCount: state.pendingSendCount + 1, isSendingMessage: true }));
 
     // Immediately update sidebar with optimistic message
     get().updateUserLastMessage(selectedUser._id, {
@@ -251,29 +272,25 @@ export const useChatStore = create((set, get) => ({
     } catch (error) {
       console.error("Error sending message:", error);
 
-      // Remove optimistic message on error
-      set({
-        messages: get().messages.filter(
-          (msg) => msg._id !== optimisticMessage._id,
-        ),
-      });
-
-      // Revert sidebar update on error
-      const previousMessage = messages[messages.length - 1];
-      if (previousMessage) {
-        get().updateUserLastMessage(selectedUser._id, {
-          text: previousMessage.text,
-          image: previousMessage.image,
-          createdAt: previousMessage.createdAt,
-          senderId: previousMessage.senderId._id || previousMessage.senderId,
-        });
-      }
+      set((state) => ({
+        messages: state.messages.map((msg) => msg._id === optimisticMessage._id ? { ...msg, status: "failed" } : msg),
+      }));
 
       toast.error(error.response?.data?.message || "Failed to send message");
       return false;
     } finally {
-      set({ isSendingMessage: false });
+      set((state) => {
+        const pendingSendCount = Math.max(0, state.pendingSendCount - 1);
+        return { pendingSendCount, isSendingMessage: pendingSendCount > 0 };
+      });
     }
+  },
+
+  retryMessage: async (messageId) => {
+    const failed = get().messages.find((message) => message._id === messageId && message.status === "failed");
+    if (!failed?.pendingPayload) return false;
+    set((state) => ({ messages: state.messages.filter((message) => message._id !== messageId) }));
+    return get().sendMessage(failed.pendingPayload);
   },
 
   markMessagesAsRead: async (userId) => {
@@ -663,7 +680,8 @@ export const useChatStore = create((set, get) => ({
   setSelectedUser: (user) => {
     messageRequestId += 1;
     messageAbortController?.abort();
-    set({ selectedUser: user, messages: [], replyingTo: null, currentPage: 1, hasMoreMessages: false, isMessagesLoading: false });
+    const cachedMessages = user?._id ? get().messageCache[user._id]?.messages || [] : [];
+    set({ selectedUser: user, messages: cachedMessages, replyingTo: null, currentPage: 1, messageCursor: null, hasMoreMessages: false, isMessagesLoading: false });
   },
 
   // Pin/unpin contacts
@@ -722,4 +740,44 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
+}), {
+  name: "chatgeniusx-chat-cache-v1",
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({
+    users: state.users,
+    selectedUser: state.selectedUser,
+    messageCache: state.messageCache,
+    unreadCounts: state.unreadCounts,
+    pinnedContacts: state.pinnedContacts,
+    mutedChats: state.mutedChats,
+  }),
+  onRehydrateStorage: () => (state) => {
+    state?.setHydrated?.();
+  },
 }));
+
+useChatStore.subscribe((state, previousState) => {
+  const userId = state.selectedUser?._id;
+  if (!userId || state.messages === previousState.messages) return;
+  const nextCache = {
+    ...state.messageCache,
+    [userId]: {
+      messages: state.messages
+        .slice(-50)
+        .filter((message) => !message._id.startsWith("temp-") || message.pendingPayload?.text)
+        .map((message) => ({
+          ...message,
+          ...(message.pendingPayload
+            ? { pendingPayload: { text: message.pendingPayload.text } }
+            : {}),
+        })),
+      cachedAt: Date.now(),
+    },
+  };
+  const boundedCache = Object.fromEntries(
+    Object.entries(nextCache)
+      .sort(([, a], [, b]) => b.cachedAt - a.cachedAt)
+      .slice(0, 8),
+  );
+  useChatStore.setState({ messageCache: boundedCache });
+});

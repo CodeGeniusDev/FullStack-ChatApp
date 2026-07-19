@@ -4,7 +4,7 @@ import { ArrowLeft, MoreVertical, User } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import ChatProfileOpener from "./ChatProfileOpener";
-import { formatLastSeen } from "../lib/utils";
+import { formatLastSeen, getAvatarUrl } from "../lib/utils";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
@@ -42,8 +42,11 @@ const ChatHeader = () => {
             >
               <div className="size-10 rounded-full relative">
                 <img
-                  src={selectedUser.profilePic || "/avatar.png"}
+                  src={getAvatarUrl(selectedUser.profilePic, 96)}
                   alt={selectedUser.fullName}
+                  width="40"
+                  height="40"
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               </div>

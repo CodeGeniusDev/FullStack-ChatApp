@@ -1,5 +1,4 @@
-// OPTIMIZED Service Worker - v2.0
-const CACHE_VERSION = 'ChatGeniusX-v1.1.0';
+const CACHE_VERSION = 'ChatGeniusX-v1.2.0';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 
@@ -8,7 +7,8 @@ const STATIC_ASSETS = [
   '/avatar.png',
   '/favicon.ico',
   '/bg.png',
-  '/icon.png'
+  '/icon.png',
+  '/index.html'
 ];
 
 // Install - cache only essential static assets
@@ -41,13 +41,8 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
   
-  // NEVER CACHE these (always fetch from network):
+  // Private application data must always come from the API/network.
   const noCachePatterns = [
-    /\.html$/,
-    /\.js$/,
-    /\.jsx$/,
-    /\.mjs$/,
-    /\.css$/,
     /\/api\//,
     /\/socket\.io\//,
     /^(ws|wss):/
@@ -57,6 +52,14 @@ self.addEventListener('fetch', (event) => {
     return event.respondWith(
       fetch(request, { cache: 'no-store' })
         .catch(() => new Response('', { status: 503 }))
+    );
+  }
+
+  // Keep the app shell usable offline. Hashed JS/CSS are left to the browser's
+  // immutable HTTP cache instead of being forcibly re-downloaded.
+  if (request.mode === 'navigate') {
+    return event.respondWith(
+      fetch(request).catch(() => caches.match('/index.html'))
     );
   }
   

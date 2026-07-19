@@ -6,19 +6,26 @@ export const getUsersForSidebar = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
 
-    // Get all users except the logged-in user - optimized with lean()
-    const allUsers = await User.find({ _id: { $ne: loggedInUserId } })
-      .select("-password")
-      .lean();
-
-    const lastMessages = await Message.aggregate([
+    const [allUsers, conversationMetadata] = await Promise.all([
+      User.find({ _id: { $ne: loggedInUserId } })
+        .select("_id fullName email profilePic bio lastSeen createdAt")
+        .lean(),
+      Message.aggregate([
       { $match: { $or: [{ senderId: loggedInUserId }, { receiverId: loggedInUserId }], deletedFor: { $ne: loggedInUserId } } },
       { $sort: { createdAt: -1 } },
       { $addFields: { otherUserId: { $cond: [{ $eq: ["$senderId", loggedInUserId] }, "$receiverId", "$senderId"] } } },
-      { $group: { _id: "$otherUserId", lastMessage: { $first: { _id: "$_id", text: "$text", image: "$image", video: "$video", audio: "$audio", createdAt: "$createdAt", senderId: "$senderId" } } } },
+      { $group: {
+        _id: "$otherUserId",
+        lastMessage: { $first: { _id: "$_id", text: "$text", image: "$image", video: "$video", audio: "$audio", createdAt: "$createdAt", senderId: "$senderId", status: "$status" } },
+        unreadCount: { $sum: { $cond: [{ $and: [{ $eq: ["$receiverId", loggedInUserId] }, { $ne: ["$status", "read"] }] }, 1, 0] } },
+      } },
+      ]),
     ]);
-    const lastMessageByUser = new Map(lastMessages.map((entry) => [entry._id.toString(), entry.lastMessage]));
-    const usersWithLastMessage = allUsers.map((user) => ({ ...user, lastMessage: lastMessageByUser.get(user._id.toString()) || null }));
+    const metadataByUser = new Map(conversationMetadata.map((entry) => [entry._id.toString(), entry]));
+    const usersWithLastMessage = allUsers.map((user) => {
+      const metadata = metadataByUser.get(user._id.toString());
+      return { ...user, lastMessage: metadata?.lastMessage || null, unreadCount: metadata?.unreadCount || 0 };
+    });
 
     // Sort users by last message timestamp (most recent first)
     usersWithLastMessage.sort((a, b) => {
@@ -39,11 +46,10 @@ export const getMessages = async (req, res) => {
     const { id: userToChatId } = req.params;
     const senderId = req.user._id;
     
-    // Pagination parameters
     if (!(await User.exists({ _id: userToChatId }))) return res.status(404).json({ message: "User not found" });
-    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
-    const skip = (page - 1) * limit;
+    const limit = Math.min(80, Math.max(1, Number.parseInt(req.query.limit, 10) || 40));
+    const before = req.query.before ? new Date(req.query.before) : null;
+    if (before && Number.isNaN(before.getTime())) return res.status(400).json({ message: "Invalid message cursor" });
 
     const conversationFilter = {
       $or: [
@@ -58,14 +64,12 @@ export const getMessages = async (req, res) => {
           deletedFor: { $ne: senderId },
         },
       ],
+      ...(before ? { createdAt: { $lt: before } } : {}),
     };
 
-    const [totalMessages, messages] = await Promise.all([
-      Message.countDocuments(conversationFilter),
-      Message.find(conversationFilter)
-      .sort({ createdAt: -1 }) // Get newest first
-      .skip(skip)
-      .limit(limit)
+    const messages = await Message.find(conversationFilter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1)
       .populate("senderId", "fullName profilePic")
       .populate("receiverId", "fullName profilePic")
       .populate({
@@ -76,8 +80,10 @@ export const getMessages = async (req, res) => {
         },
       })
       .populate("reactions.userId", "fullName profilePic")
-      .lean(),
-    ]);
+      .lean();
+
+    const hasMore = messages.length > limit;
+    if (hasMore) messages.pop();
 
     // Reverse to show oldest first in UI
     messages.reverse();
@@ -99,10 +105,9 @@ export const getMessages = async (req, res) => {
     res.status(200).json({
       messages,
       pagination: {
-        page,
         limit,
-        total: totalMessages,
-        hasMore: skip + messages.length < totalMessages,
+        hasMore,
+        nextCursor: hasMore ? messages[0]?.createdAt : null,
       },
     });
   } catch (error) {

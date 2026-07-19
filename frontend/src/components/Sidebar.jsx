@@ -1,10 +1,9 @@
 "use client";
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useChatStore } from "../store/useChatStore";
-import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import { Users, User, Search, X, Pin, Bell, BellOff } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
-import { formatLastSeen, truncateText } from "../lib/utils";
+import { formatLastSeen, getAvatarUrl, truncateText } from "../lib/utils";
 import ChatProfileOpener from "./ChatProfileOpener";
 
 // Default and constraints for sidebar width
@@ -16,20 +15,15 @@ const SIDEBAR = {
 };
 
 const Sidebar = () => {
-  const {
-    users = [],
-    getUsers,
-    selectedUser,
-    setSelectedUser,
-    unreadCounts,
-    getUnreadCounts,
-    pinnedContacts,
-    mutedChats,
-    togglePinContact,
-    toggleMuteChat,
-  } = useChatStore();
-
-  const { onlineUsers } = useAuthStore();
+  const users = useChatStore((state) => state.users);
+  const selectedUser = useChatStore((state) => state.selectedUser);
+  const setSelectedUser = useChatStore((state) => state.setSelectedUser);
+  const unreadCounts = useChatStore((state) => state.unreadCounts);
+  const pinnedContacts = useChatStore((state) => state.pinnedContacts);
+  const mutedChats = useChatStore((state) => state.mutedChats);
+  const togglePinContact = useChatStore((state) => state.togglePinContact);
+  const toggleMuteChat = useChatStore((state) => state.toggleMuteChat);
+  const onlineUsers = useAuthStore((state) => state.onlineUsers);
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -126,12 +120,6 @@ const Sidebar = () => {
   }, []);
 
   useEffect(() => {
-    getUsers();
-    getUnreadCounts();
-    // Pin/mute data is now loaded from server via checkAuth, no need to load from localStorage
-  }, [getUnreadCounts, getUsers]);
-
-  useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
@@ -147,15 +135,6 @@ const Sidebar = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [contextMenu]);
-
-  // Refresh unread counts every 30 seconds (was 10 seconds - reduced frequency)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      getUnreadCounts();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [getUnreadCounts]);
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -409,10 +388,13 @@ const Sidebar = () => {
                 <div className="relative mx-auto lg:mx-0 flex-shrink-0">
                   <div className="size-12 rounded-full overflow-hidden bg-base-200">
                     <img
-                      src={user.profilePic || "/avatar.png"}
+                      src={getAvatarUrl(user.profilePic, 96)}
                       alt={user.fullName || "User"}
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      decoding="async"
+                      width="48"
+                      height="48"
                     />
                   </div>
                   {isOnline && (
